@@ -8,16 +8,15 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCVSxAXi3-d1EHGTBGMI45rz-9HQzkhD3o",
-  authDomain: "appp-d4f7e.firebaseapp.com",
-  projectId: "appp-d4f7e",
-  storageBucket: "appp-d4f7e.firebasestorage.app",
-  messagingSenderId: "251371985768",
-  appId: "1:251371985768:web:5e678146621ec8a5b714dd",
-  measurementId: "G-QYGZ85BDRS"
+  apiKey: "AIzaSyCJ8kM1wq_CLa9lQ1bz3FmhipqRD4fTIYE",
+  authDomain: "maggie115-contact-book.firebaseapp.com",
+  projectId: "maggie115-contact-book",
+  storageBucket: "maggie115-contact-book.firebasestorage.app",
+  messagingSenderId: "491473953898",
+  appId: "1:491473953898:web:eb1d97a1d1c5f269c21613"
 };
 
-const ADMIN_UID = "PzuN64hXkWbPy5cUvpnJtDAUNVE2";
+const ADMIN_UID = "S65ZN3z3fLQmlWlXUykRBo6V9O53";
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);

@@ -2,11 +2,14 @@
 
 這是一個使用 GitHub Pages 與 Firebase 製作的電子聯絡簿。家長可以公開閱讀，只有指定的 Firebase 管理員帳號可以新增、修改或刪除資料。
 
+目前連接的 Firebase 專案：`maggie115-contact-book`
+
 ## 檔案
 
 - `index.html`：頁面結構
 - `styles.css`：黑板風格與手機版面
 - `app.js`：Firebase 登入、Firestore、月曆與管理功能
+- `firestore.rules`：Firestore 安全規則（需貼到 Firebase 控制台發布）
 
 ## 發布到 GitHub Pages
 
@@ -23,7 +26,7 @@
 ## 重要安全設定
 
 - Authentication 必須啟用「電子郵件地址／密碼」。
-- Firestore 必須使用專用安全規則，並限制管理員 UID。
+- Firestore 必須使用 `firestore.rules` 內的安全規則，並限制管理員 UID。
 - 不要在網站中張貼學生電話、地址、身分證字號或其他敏感個資。
 - 若更換 Firebase 管理員，必須同步修改 `app.js` 的 `ADMIN_UID` 與 Firestore Rules。
 
