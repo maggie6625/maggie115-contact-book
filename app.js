@@ -121,9 +121,16 @@ function renderResources() {
   });
 }
 
-function makeActions(onEdit, onDelete) {
+function makeActions(onEdit, onDelete, onCopy = null) {
   const actions = document.createElement("div");
   actions.className = "card-actions";
+  if (onCopy) {
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.textContent = "複製";
+    copy.addEventListener("click", onCopy);
+    actions.append(copy);
+  }
   const edit = document.createElement("button");
   edit.type = "button";
   edit.textContent = "編輯";
@@ -171,7 +178,13 @@ function renderEntries() {
       row.append(badge);
     });
     if (row.children.length) card.append(row);
-    if (isAdmin()) card.append(makeActions(() => editEntry(entry.id), () => removeDoc("entries", entry.id, "聯絡簿")));
+    if (isAdmin()) {
+      card.append(makeActions(
+        () => editEntry(entry.id),
+        () => removeDoc("entries", entry.id, "聯絡簿"),
+        () => copyEntry(entry.id)
+      ));
+    }
     container.append(card);
   });
 }
@@ -248,6 +261,22 @@ function editEntry(id) {
   $("#entry-date").value = entry.date;
   $("#entry-content").value = entry.content;
   document.querySelectorAll('input[name="entry-tags"]').forEach(input => { input.checked = (entry.tags || []).includes(input.value); });
+  openDialog("entry-dialog");
+}
+
+function copyEntry(id) {
+  const entry = state.entries.find(item => item.id === id);
+  if (!entry || !isAdmin()) return;
+
+  // 複製只會預先填入表單，不會直接寫入資料庫，也不會覆蓋原資料。
+  $("#entry-form").reset();
+  $("#entry-id").value = "";
+  $("#entry-date").value = todayKey();
+  $("#entry-content").value = entry.content || "";
+  document.querySelectorAll('input[name="entry-tags"]').forEach(input => {
+    input.checked = (entry.tags || []).includes(input.value);
+  });
+  $("#entry-dialog-title").textContent = "複製聯絡簿";
   openDialog("entry-dialog");
 }
 
