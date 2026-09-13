@@ -55,6 +55,11 @@
           <button id="clear-filter" class="text-button hidden">顯示全部</button>
         </div>
         <p id="filter-label" class="filter-label"></p>
+        <div id="entry-admin-filters" class="entry-filters hidden" aria-label="聯絡簿狀態篩選">
+          <button type="button" data-entry-filter="all" class="active">全部</button>
+          <button type="button" data-entry-filter="entries">已發布</button>
+          <button type="button" data-entry-filter="drafts">草稿匣</button>
+        </div>
         <div id="entry-list" class="entry-list">
           <p class="empty-state">正在載入…</p>
         </div>
@@ -94,6 +99,7 @@
     <form id="entry-form" class="modal-card modal-wide">
       <div class="modal-heading"><h2 id="entry-dialog-title">新增聯絡簿</h2><button type="button" class="close-button" data-close aria-label="關閉">×</button></div>
       <input id="entry-id" type="hidden">
+      <input id="entry-source" type="hidden">
       <label>日期<input id="entry-date" type="date" required></label>
       <div class="template-picker">
         <label>套用常用範本<select id="entry-template"><option value="">目前沒有範本</option></select></label>
@@ -101,7 +107,11 @@
       </div>
       <label>聯絡簿內容<textarea id="entry-content" rows="9" placeholder="例如：&#10;1. 國語習作第 20 頁&#10;2. 數學練習一張&#10;3. 明天帶水壺" required></textarea></label>
       <fieldset><legend>標籤</legend><div id="entry-tag-options" class="check-grid"></div></fieldset>
-      <div class="form-actions"><button type="button" class="button button-secondary" data-close>取消</button><button class="button button-primary">儲存</button></div>
+      <div class="form-actions">
+        <button type="button" class="button button-secondary" data-close>取消</button>
+        <button id="save-draft" type="button" class="button button-secondary">儲存草稿</button>
+        <button id="publish-entry" class="button button-primary">立即發布</button>
+      </div>
     </form>
   </dialog>
 

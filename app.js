@@ -4,7 +4,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 import {
   getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc,
-  onSnapshot, query, orderBy, serverTimestamp
+  onSnapshot, query, orderBy, serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -24,13 +24,17 @@ const db = getFirestore(app);
 const state = {
   user: null,
   entries: [],
+  drafts: [],
   links: [],
   tags: [],
   templates: [],
   settings: { title: "台中市清水國小 一年戊班 電子聯絡簿", subtitle: "115 學年度" },
   selectedDate: todayKey(),
-  calendarDate: new Date()
+  calendarDate: new Date(),
+  entryFilter: "all"
 };
+
+let unsubscribeDrafts = null;
 
 const $ = (selector) => document.querySelector(selector);
 const isAdmin = () => state.user?.uid === ADMIN_UID;
@@ -144,29 +148,81 @@ function makeActions(onEdit, onDelete, onCopy = null) {
   return actions;
 }
 
+function allAdminEntries() {
+  return [
+    ...state.entries.map(item => ({ ...item, _source: "entries" })),
+    ...state.drafts.map(item => ({ ...item, _source: "drafts" }))
+  ].sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function findEntry(source, id) {
+  const items = source === "drafts" ? state.drafts : state.entries;
+  return items.find(item => item.id === id);
+}
+
+function entryAction(label, handler, className = "") {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  if (className) button.className = className;
+  button.addEventListener("click", handler);
+  return button;
+}
+
+function makeEntryActions(entry) {
+  const actions = document.createElement("div");
+  actions.className = "card-actions entry-actions";
+  actions.append(
+    entryAction("複製", () => copyEntry(entry._source, entry.id)),
+    entryAction("編輯", () => editEntry(entry._source, entry.id))
+  );
+  if (entry._source === "drafts") {
+    actions.append(entryAction("發布", () => publishDraft(entry.id), "publish-action"));
+  } else {
+    actions.append(entryAction("取消發布", () => unpublishEntry(entry.id)));
+  }
+  actions.append(entryAction("刪除", () => removeDoc(entry._source, entry.id, entry._source === "drafts" ? "草稿" : "聯絡簿")));
+  return actions;
+}
+
 function renderEntries() {
   const container = $("#entry-list");
-  const entries = state.selectedDate ? state.entries.filter(item => item.date === state.selectedDate) : state.entries;
+  let entries = isAdmin() ? allAdminEntries() : state.entries.map(item => ({ ...item, _source: "entries" }));
+  if (isAdmin() && state.entryFilter !== "all") entries = entries.filter(item => item._source === state.entryFilter);
+  if (state.selectedDate) entries = entries.filter(item => item.date === state.selectedDate);
+
+  $("#entry-admin-filters").classList.toggle("hidden", !isAdmin());
+  document.querySelectorAll("[data-entry-filter]").forEach(button => {
+    button.classList.toggle("active", button.dataset.entryFilter === state.entryFilter);
+  });
   $("#filter-label").textContent = state.selectedDate ? `篩選日期：${formatDate(state.selectedDate)}` : "顯示全部聯絡簿";
   $("#clear-filter").classList.toggle("hidden", !state.selectedDate);
   container.replaceChildren();
   if (!entries.length) {
     const empty = document.createElement("p");
     empty.className = "empty-state";
-    empty.textContent = "沒有符合的聯絡簿資料";
+    empty.textContent = isAdmin() && state.entryFilter === "drafts" ? "目前沒有草稿" : "沒有符合的聯絡簿資料";
     container.append(empty);
     return;
   }
   entries.forEach(entry => {
     const card = document.createElement("article");
-    card.className = "entry-card";
+    card.className = `entry-card${entry._source === "drafts" ? " draft-card" : ""}`;
+    if (isAdmin()) card.classList.add("admin-entry-card");
     const date = document.createElement("p");
     date.className = "entry-date";
     date.textContent = formatDate(entry.date);
+    card.append(date);
+    if (isAdmin()) {
+      const status = document.createElement("span");
+      status.className = `entry-status ${entry._source === "drafts" ? "draft-status" : "published-status"}`;
+      status.textContent = entry._source === "drafts" ? "草稿" : "已發布";
+      card.append(status);
+    }
     const content = document.createElement("p");
     content.className = "entry-content";
     content.textContent = entry.content;
-    card.append(date, content);
+    card.append(content);
     const row = document.createElement("div");
     row.className = "tag-row";
     (entry.tags || []).forEach(tagId => {
@@ -179,13 +235,7 @@ function renderEntries() {
       row.append(badge);
     });
     if (row.children.length) card.append(row);
-    if (isAdmin()) {
-      card.append(makeActions(
-        () => editEntry(entry.id),
-        () => removeDoc("entries", entry.id, "聯絡簿"),
-        () => copyEntry(entry.id)
-      ));
-    }
+    if (isAdmin()) card.append(makeEntryActions(entry));
     container.append(card);
   });
 }
@@ -206,7 +256,8 @@ function renderCalendar() {
     button.textContent = day;
     button.classList.toggle("today", key === todayKey());
     button.classList.toggle("selected", key === state.selectedDate);
-    button.classList.toggle("has-entry", state.entries.some(entry => entry.date === key));
+    const calendarEntries = isAdmin() ? [...state.entries, ...state.drafts] : state.entries;
+    button.classList.toggle("has-entry", calendarEntries.some(entry => entry.date === key));
     button.addEventListener("click", () => {
       state.selectedDate = key;
       renderCalendar();
@@ -309,10 +360,27 @@ function renderTemplates() {
   });
 }
 
-function editEntry(id) {
-  const entry = state.entries.find(item => item.id === id);
+function setEntryFormMode(source = "") {
+  $("#entry-source").value = source;
+  if (source === "drafts") {
+    $("#entry-dialog-title").textContent = "修改草稿";
+    $("#save-draft").textContent = "儲存草稿";
+    $("#publish-entry").textContent = "發布";
+  } else if (source === "entries") {
+    $("#entry-dialog-title").textContent = "修改已發布聯絡簿";
+    $("#save-draft").textContent = "取消發布";
+    $("#publish-entry").textContent = "儲存修改";
+  } else {
+    $("#entry-dialog-title").textContent = "新增聯絡簿";
+    $("#save-draft").textContent = "儲存草稿";
+    $("#publish-entry").textContent = "立即發布";
+  }
+}
+
+function editEntry(source, id) {
+  const entry = findEntry(source, id);
   if (!entry) return;
-  $("#entry-dialog-title").textContent = "修改聯絡簿";
+  setEntryFormMode(source);
   $("#entry-id").value = id;
   $("#entry-date").value = entry.date;
   $("#entry-template").value = "";
@@ -321,13 +389,14 @@ function editEntry(id) {
   openDialog("entry-dialog");
 }
 
-function copyEntry(id) {
-  const entry = state.entries.find(item => item.id === id);
+function copyEntry(source, id) {
+  const entry = findEntry(source, id);
   if (!entry || !isAdmin()) return;
 
   // 複製只會預先填入表單，不會直接寫入資料庫，也不會覆蓋原資料。
   $("#entry-form").reset();
   $("#entry-id").value = "";
+  setEntryFormMode("");
   $("#entry-date").value = todayKey();
   $("#entry-template").value = "";
   $("#entry-content").value = entry.content || "";
@@ -336,6 +405,43 @@ function copyEntry(id) {
   });
   $("#entry-dialog-title").textContent = "複製聯絡簿";
   openDialog("entry-dialog");
+}
+
+function entryMoveData(entry, destination) {
+  const data = {
+    date: entry.date,
+    content: entry.content,
+    tags: entry.tags || [],
+    createdAt: entry.createdAt || serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
+  if (destination === "entries") data.publishedAt = serverTimestamp();
+  return data;
+}
+
+async function moveEntry(source, destination, entry) {
+  const batch = writeBatch(db);
+  batch.set(doc(db, destination, entry.id), entryMoveData(entry, destination));
+  batch.delete(doc(db, source, entry.id));
+  await batch.commit();
+}
+
+async function publishDraft(id) {
+  const entry = findEntry("drafts", id);
+  if (!entry || !isAdmin() || !confirm("確定發布這篇草稿嗎？發布後家長即可看到。")) return;
+  try {
+    await moveEntry("drafts", "entries", entry);
+    showToast("草稿已發布");
+  } catch (error) { showToast(`發布失敗：${error.message}`, true); }
+}
+
+async function unpublishEntry(id) {
+  const entry = findEntry("entries", id);
+  if (!entry || !isAdmin() || !confirm("確定取消發布嗎？取消後家長將看不到這篇聯絡簿。")) return;
+  try {
+    await moveEntry("entries", "drafts", entry);
+    showToast("已取消發布並移至草稿匣");
+  } catch (error) { showToast(`取消發布失敗：${error.message}`, true); }
 }
 
 function editTemplate(id) {
@@ -403,15 +509,33 @@ function subscribeData() {
   }, error => showToast(`設定載入失敗：${error.message}`, true));
 }
 
+function subscribeDrafts() {
+  if (unsubscribeDrafts) {
+    unsubscribeDrafts();
+    unsubscribeDrafts = null;
+  }
+  state.drafts = [];
+  if (!isAdmin()) {
+    renderEntries();
+    renderCalendar();
+    return;
+  }
+  unsubscribeDrafts = onSnapshot(query(collection(db, "drafts"), orderBy("date", "desc")), snapshot => {
+    state.drafts = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+    renderEntries();
+    renderCalendar();
+  }, error => showToast(`草稿載入失敗：${error.message}`, true));
+}
+
 document.querySelectorAll("[data-open]").forEach(button => button.addEventListener("click", () => {
   if (!isAdmin()) return;
   const id = button.dataset.open;
   if (id === "entry-dialog") {
     $("#entry-form").reset();
     $("#entry-id").value = "";
+    setEntryFormMode("");
     $("#entry-date").value = state.selectedDate || todayKey();
     $("#entry-template").value = "";
-    $("#entry-dialog-title").textContent = "新增聯絡簿";
   }
   if (id === "link-dialog") {
     $("#link-form").reset();
@@ -448,22 +572,63 @@ $("#login-form").addEventListener("submit", async event => {
   } catch (error) { showToast(`登入失敗：${error.message}`, true); }
 });
 
-$("#entry-form").addEventListener("submit", async event => {
-  event.preventDefault();
-  if (!isAdmin()) return;
-  const id = $("#entry-id").value;
-  const data = {
+function entryFormData() {
+  return {
     date: $("#entry-date").value,
     content: $("#entry-content").value.trim(),
     tags: [...document.querySelectorAll('input[name="entry-tags"]:checked')].map(input => input.value),
     updatedAt: serverTimestamp()
   };
+}
+
+$("#entry-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!isAdmin()) return;
+  const id = $("#entry-id").value;
+  const source = $("#entry-source").value;
+  const data = entryFormData();
   try {
-    if (id) await updateDoc(doc(db, "entries", id), data);
-    else await addDoc(collection(db, "entries"), { ...data, createdAt: serverTimestamp() });
+    if (id && source === "drafts") {
+      const original = findEntry("drafts", id);
+      const batch = writeBatch(db);
+      batch.set(doc(db, "entries", id), {
+        ...data,
+        createdAt: original?.createdAt || serverTimestamp(),
+        publishedAt: serverTimestamp()
+      });
+      batch.delete(doc(db, "drafts", id));
+      await batch.commit();
+    } else if (id) {
+      await updateDoc(doc(db, "entries", id), data);
+    } else {
+      await addDoc(collection(db, "entries"), { ...data, createdAt: serverTimestamp(), publishedAt: serverTimestamp() });
+    }
     closeDialog($("#entry-dialog"));
-    showToast(id ? "聯絡簿已更新" : "聯絡簿已新增");
+    showToast(id && source === "entries" ? "已發布內容已更新" : "聯絡簿已發布");
   } catch (error) { showToast(`儲存失敗：${error.message}`, true); }
+});
+
+$("#save-draft").addEventListener("click", async () => {
+  if (!isAdmin() || !$("#entry-form").reportValidity()) return;
+  const id = $("#entry-id").value;
+  const source = $("#entry-source").value;
+  const data = entryFormData();
+  if (source === "entries" && !confirm("確定取消發布嗎？取消後家長將看不到這篇聯絡簿。")) return;
+  try {
+    if (id && source === "entries") {
+      const original = findEntry("entries", id);
+      const batch = writeBatch(db);
+      batch.set(doc(db, "drafts", id), { ...data, createdAt: original?.createdAt || serverTimestamp() });
+      batch.delete(doc(db, "entries", id));
+      await batch.commit();
+    } else if (id) {
+      await updateDoc(doc(db, "drafts", id), data);
+    } else {
+      await addDoc(collection(db, "drafts"), { ...data, createdAt: serverTimestamp() });
+    }
+    closeDialog($("#entry-dialog"));
+    showToast(source === "entries" ? "已取消發布並移至草稿匣" : "草稿已儲存");
+  } catch (error) { showToast(`草稿儲存失敗：${error.message}`, true); }
 });
 
 $("#apply-template").addEventListener("click", () => {
@@ -545,10 +710,18 @@ $("#settings-form").addEventListener("submit", async event => {
 $("#prev-month").addEventListener("click", () => { state.calendarDate = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() - 1, 1); renderCalendar(); });
 $("#next-month").addEventListener("click", () => { state.calendarDate = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth() + 1, 1); renderCalendar(); });
 $("#clear-filter").addEventListener("click", () => { state.selectedDate = null; renderEntries(); renderCalendar(); });
+document.querySelectorAll("[data-entry-filter]").forEach(button => button.addEventListener("click", () => {
+  if (!isAdmin()) return;
+  state.entryFilter = button.dataset.entryFilter;
+  state.selectedDate = null;
+  renderEntries();
+  renderCalendar();
+}));
 
 onAuthStateChanged(auth, user => {
   state.user = user;
-  renderHeader(); renderEntries(); renderResources();
+  if (!isAdmin()) state.entryFilter = "all";
+  renderHeader(); renderEntries(); renderResources(); subscribeDrafts();
 });
 
 renderHeader();

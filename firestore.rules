@@ -12,6 +12,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /drafts/{draftId} {
+      allow read, write: if isAdmin();
+    }
+
     match /links/{linkId} {
       allow read: if true;
       allow write: if isAdmin();
