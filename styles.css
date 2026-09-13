@@ -50,6 +50,7 @@ button { cursor: pointer; }
 .announcement-list { display: grid; gap: 12px; }
 .announcement-card { padding: 18px; border-left: 6px solid #d97706; border-radius: 10px; color: #382b16; background: #fff; box-shadow: 0 4px 14px #6f431f16; }
 .announcement-content { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; font-weight: 700; }
+.announcement-content a { color: #176144; text-decoration-thickness: 2px; text-underline-offset: 3px; }
 .announcement-meta { margin: 12px 0 0; color: #805814; font-size: 13px; }
 .content-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(290px, .75fr); gap: 22px; align-items: start; }
 .section-heading { display: flex; justify-content: space-between; gap: 16px; align-items: end; margin-bottom: 18px; }
@@ -72,6 +73,7 @@ button { cursor: pointer; }
 .draft-status { color: #553b0d; background: #fde68a; }
 .published-status { color: #123c2a; background: #bbf7d0; }
 .entry-content { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.85; font-size: 16px; }
+.entry-content a { color: var(--yellow); font-weight: 800; text-decoration-thickness: 2px; text-underline-offset: 3px; }
 .tag-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 14px; }
 .tag { padding: 4px 9px; color: #fff; border-radius: 999px; font-size: 12px; font-weight: 800; text-shadow: 0 1px 2px #0005; }
 .card-actions { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; }

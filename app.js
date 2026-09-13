@@ -92,6 +92,42 @@ function safeUrl(value) {
   } catch { return "#"; }
 }
 
+function appendLinkedContent(container, value = "") {
+  const pattern = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<]+)/gi;
+  let cursor = 0;
+
+  for (const match of value.matchAll(pattern)) {
+    container.append(document.createTextNode(value.slice(cursor, match.index)));
+    const markdownLabel = match[1];
+    let url = match[2] || match[3];
+    let trailing = "";
+
+    if (!markdownLabel) {
+      const trailingCharacters = ".,!?;:，。！？；：)]}";
+      while (url && trailingCharacters.includes(url.at(-1))) {
+        trailing = url.at(-1) + trailing;
+        url = url.slice(0, -1);
+      }
+    }
+
+    const href = safeUrl(url);
+    if (href === "#") {
+      container.append(document.createTextNode(match[0]));
+    } else {
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      anchor.textContent = markdownLabel || url;
+      container.append(anchor);
+      if (trailing) container.append(document.createTextNode(trailing));
+    }
+    cursor = match.index + match[0].length;
+  }
+
+  container.append(document.createTextNode(value.slice(cursor)));
+}
+
 function openDialog(id) {
   const dialog = document.getElementById(id);
   if (dialog && !dialog.open) dialog.showModal();
@@ -163,7 +199,7 @@ function renderAnnouncements() {
     card.className = "announcement-card";
     const content = document.createElement("p");
     content.className = "announcement-content";
-    content.textContent = entry.content;
+    appendLinkedContent(content, entry.content);
     card.append(content);
 
     const meta = document.createElement("p");
@@ -297,7 +333,7 @@ function renderEntries() {
     }
     const content = document.createElement("p");
     content.className = "entry-content";
-    content.textContent = entry.content;
+    appendLinkedContent(content, entry.content);
     card.append(content);
     const row = document.createElement("div");
     row.className = "tag-row";
