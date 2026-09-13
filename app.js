@@ -62,6 +62,29 @@ function formatDate(dateString) {
   return `民國 ${year - 1911} 年 ${month} 月 ${day} 日（${weekday}）`;
 }
 
+function nowLocalKey() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  const h = String(now.getHours()).padStart(2, "0");
+  const min = String(now.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${d}T${h}:${min}`;
+}
+
+function formatDateTime(value) {
+  if (!value) return "";
+  const [date, time] = value.split("T");
+  const [year, month, day] = date.split("-").map(Number);
+  return `${year}/${month}/${day} ${time || ""}`.trim();
+}
+
+function isEntryVisibleNow(entry) {
+  const now = nowLocalKey();
+  return (!entry.publishStart || entry.publishStart <= now)
+    && (!entry.publishEnd || entry.publishEnd >= now);
+}
+
 function safeUrl(value) {
   try {
     const url = new URL(value);
@@ -126,6 +149,50 @@ function renderResources() {
   });
 }
 
+function renderAnnouncements() {
+  const panel = $("#announcement-panel");
+  const container = $("#announcement-list");
+  const announcements = state.entries
+    .filter(entry => entry.pinned && isEntryVisibleNow(entry))
+    .sort((a, b) => (b.publishStart || b.date).localeCompare(a.publishStart || a.date));
+
+  panel.classList.toggle("hidden", !announcements.length);
+  container.replaceChildren();
+  announcements.forEach(entry => {
+    const card = document.createElement("article");
+    card.className = "announcement-card";
+    const content = document.createElement("p");
+    content.className = "announcement-content";
+    content.textContent = entry.content;
+    card.append(content);
+
+    const meta = document.createElement("p");
+    meta.className = "announcement-meta";
+    if (entry.publishStart && entry.publishEnd) {
+      meta.textContent = `公告期間：${formatDateTime(entry.publishStart)} ～ ${formatDateTime(entry.publishEnd)}`;
+    } else if (entry.publishStart) {
+      meta.textContent = `自 ${formatDateTime(entry.publishStart)} 起公告`;
+    } else if (entry.publishEnd) {
+      meta.textContent = `公告至 ${formatDateTime(entry.publishEnd)}`;
+    }
+    if (meta.textContent) card.append(meta);
+
+    const row = document.createElement("div");
+    row.className = "tag-row";
+    (entry.tags || []).forEach(tagId => {
+      const tag = state.tags.find(item => item.id === tagId);
+      if (!tag) return;
+      const badge = document.createElement("span");
+      badge.className = "tag";
+      badge.style.backgroundColor = tag.color;
+      badge.textContent = tag.name;
+      row.append(badge);
+    });
+    if (row.children.length) card.append(row);
+    container.append(card);
+  });
+}
+
 function makeActions(onEdit, onDelete, onCopy = null) {
   const actions = document.createElement("div");
   actions.className = "card-actions";
@@ -187,7 +254,9 @@ function makeEntryActions(entry) {
 
 function renderEntries() {
   const container = $("#entry-list");
-  let entries = isAdmin() ? allAdminEntries() : state.entries.map(item => ({ ...item, _source: "entries" }));
+  let entries = isAdmin()
+    ? allAdminEntries()
+    : state.entries.filter(entry => isEntryVisibleNow(entry) && !entry.pinned).map(item => ({ ...item, _source: "entries" }));
   if (isAdmin() && state.entryFilter !== "all") entries = entries.filter(item => item._source === state.entryFilter);
   if (state.selectedDate) entries = entries.filter(item => item.date === state.selectedDate);
 
@@ -215,8 +284,15 @@ function renderEntries() {
     card.append(date);
     if (isAdmin()) {
       const status = document.createElement("span");
+      const now = nowLocalKey();
+      const isFuture = entry.pinned && entry.publishStart && entry.publishStart > now;
+      const isExpired = entry.pinned && entry.publishEnd && entry.publishEnd < now;
       status.className = `entry-status ${entry._source === "drafts" ? "draft-status" : "published-status"}`;
-      status.textContent = entry._source === "drafts" ? "草稿" : "已發布";
+      if (entry._source === "drafts") status.textContent = "草稿";
+      else if (isFuture) status.textContent = "排程公告";
+      else if (isExpired) status.textContent = "公告已結束";
+      else if (entry.pinned) status.textContent = "重要公告";
+      else status.textContent = "已發布";
       card.append(status);
     }
     const content = document.createElement("p");
@@ -256,7 +332,9 @@ function renderCalendar() {
     button.textContent = day;
     button.classList.toggle("today", key === todayKey());
     button.classList.toggle("selected", key === state.selectedDate);
-    const calendarEntries = isAdmin() ? [...state.entries, ...state.drafts] : state.entries;
+    const calendarEntries = isAdmin()
+      ? [...state.entries, ...state.drafts]
+      : state.entries.filter(entry => isEntryVisibleNow(entry) && !entry.pinned);
     button.classList.toggle("has-entry", calendarEntries.some(entry => entry.date === key));
     button.addEventListener("click", () => {
       state.selectedDate = key;
@@ -377,6 +455,13 @@ function setEntryFormMode(source = "") {
   }
 }
 
+function syncAnnouncementFields() {
+  const enabled = $("#entry-pinned").checked;
+  $("#entry-publish-start").disabled = !enabled;
+  $("#entry-publish-end").disabled = !enabled;
+  $("#announcement-time-fields").classList.toggle("disabled-fields", !enabled);
+}
+
 function editEntry(source, id) {
   const entry = findEntry(source, id);
   if (!entry) return;
@@ -385,6 +470,10 @@ function editEntry(source, id) {
   $("#entry-date").value = entry.date;
   $("#entry-template").value = "";
   $("#entry-content").value = entry.content;
+  $("#entry-pinned").checked = Boolean(entry.pinned);
+  $("#entry-publish-start").value = entry.publishStart || "";
+  $("#entry-publish-end").value = entry.publishEnd || "";
+  syncAnnouncementFields();
   document.querySelectorAll('input[name="entry-tags"]').forEach(input => { input.checked = (entry.tags || []).includes(input.value); });
   openDialog("entry-dialog");
 }
@@ -400,6 +489,10 @@ function copyEntry(source, id) {
   $("#entry-date").value = todayKey();
   $("#entry-template").value = "";
   $("#entry-content").value = entry.content || "";
+  $("#entry-pinned").checked = false;
+  $("#entry-publish-start").value = "";
+  $("#entry-publish-end").value = "";
+  syncAnnouncementFields();
   document.querySelectorAll('input[name="entry-tags"]').forEach(input => {
     input.checked = (entry.tags || []).includes(input.value);
   });
@@ -412,6 +505,9 @@ function entryMoveData(entry, destination) {
     date: entry.date,
     content: entry.content,
     tags: entry.tags || [],
+    pinned: Boolean(entry.pinned),
+    publishStart: entry.publishStart || "",
+    publishEnd: entry.publishEnd || "",
     createdAt: entry.createdAt || serverTimestamp(),
     updatedAt: serverTimestamp()
   };
@@ -485,7 +581,7 @@ async function removeDoc(collectionName, id, label) {
 function subscribeData() {
   onSnapshot(query(collection(db, "entries"), orderBy("date", "desc")), snapshot => {
     state.entries = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
-    renderEntries(); renderCalendar();
+    renderEntries(); renderCalendar(); renderAnnouncements();
   }, error => showToast(`聯絡簿載入失敗：${error.message}`, true));
 
   onSnapshot(query(collection(db, "links"), orderBy("title")), snapshot => {
@@ -495,7 +591,7 @@ function subscribeData() {
 
   onSnapshot(query(collection(db, "tags"), orderBy("name")), snapshot => {
     state.tags = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
-    renderTags(); renderEntries();
+    renderTags(); renderEntries(); renderAnnouncements();
   }, error => showToast(`標籤載入失敗：${error.message}`, true));
 
   onSnapshot(query(collection(db, "templates"), orderBy("name")), snapshot => {
@@ -536,6 +632,7 @@ document.querySelectorAll("[data-open]").forEach(button => button.addEventListen
     setEntryFormMode("");
     $("#entry-date").value = state.selectedDate || todayKey();
     $("#entry-template").value = "";
+    syncAnnouncementFields();
   }
   if (id === "link-dialog") {
     $("#link-form").reset();
@@ -573,10 +670,20 @@ $("#login-form").addEventListener("submit", async event => {
 });
 
 function entryFormData() {
+  const pinned = $("#entry-pinned").checked;
+  const publishStart = pinned ? $("#entry-publish-start").value : "";
+  const publishEnd = pinned ? $("#entry-publish-end").value : "";
+  if (publishStart && publishEnd && publishEnd < publishStart) {
+    showToast("公告結束時間不能早於開始時間", true);
+    return null;
+  }
   return {
     date: $("#entry-date").value,
     content: $("#entry-content").value.trim(),
     tags: [...document.querySelectorAll('input[name="entry-tags"]:checked')].map(input => input.value),
+    pinned,
+    publishStart,
+    publishEnd,
     updatedAt: serverTimestamp()
   };
 }
@@ -587,6 +694,7 @@ $("#entry-form").addEventListener("submit", async event => {
   const id = $("#entry-id").value;
   const source = $("#entry-source").value;
   const data = entryFormData();
+  if (!data) return;
   try {
     if (id && source === "drafts") {
       const original = findEntry("drafts", id);
@@ -613,6 +721,7 @@ $("#save-draft").addEventListener("click", async () => {
   const id = $("#entry-id").value;
   const source = $("#entry-source").value;
   const data = entryFormData();
+  if (!data) return;
   if (source === "entries" && !confirm("確定取消發布嗎？取消後家長將看不到這篇聯絡簿。")) return;
   try {
     if (id && source === "entries") {
@@ -640,6 +749,8 @@ $("#apply-template").addEventListener("click", () => {
   $("#entry-content").focus();
   showToast(`已套用「${template.name}」`);
 });
+
+$("#entry-pinned").addEventListener("change", syncAnnouncementFields);
 
 $("#template-form").addEventListener("submit", async event => {
   event.preventDefault();
@@ -721,9 +832,14 @@ document.querySelectorAll("[data-entry-filter]").forEach(button => button.addEve
 onAuthStateChanged(auth, user => {
   state.user = user;
   if (!isAdmin()) state.entryFilter = "all";
-  renderHeader(); renderEntries(); renderResources(); subscribeDrafts();
+  renderHeader(); renderEntries(); renderResources(); renderAnnouncements(); subscribeDrafts();
 });
 
 renderHeader();
 renderCalendar();
 subscribeData();
+setInterval(() => {
+  renderEntries();
+  renderCalendar();
+  renderAnnouncements();
+}, 60000);

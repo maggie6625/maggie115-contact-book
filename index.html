@@ -33,6 +33,16 @@
   </nav>
 
   <main class="page-shell">
+    <section id="announcement-panel" class="panel announcement-panel hidden" aria-labelledby="announcement-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">IMPORTANT NOTICE</p>
+          <h2 id="announcement-title">📌 重要公告</h2>
+        </div>
+      </div>
+      <div id="announcement-list" class="announcement-list"></div>
+    </section>
+
     <section class="panel resources-panel" aria-labelledby="resources-title">
       <div class="section-heading">
         <div>
@@ -107,6 +117,15 @@
       </div>
       <label>聯絡簿內容<textarea id="entry-content" rows="9" placeholder="例如：&#10;1. 國語習作第 20 頁&#10;2. 數學練習一張&#10;3. 明天帶水壺" required></textarea></label>
       <fieldset><legend>標籤</legend><div id="entry-tag-options" class="check-grid"></div></fieldset>
+      <fieldset class="announcement-settings">
+        <legend>重要公告設定</legend>
+        <label class="toggle-label"><input id="entry-pinned" type="checkbox"> 設為重要公告並置頂</label>
+        <div id="announcement-time-fields" class="datetime-grid disabled-fields">
+          <label>公告開始時間（可留空）<input id="entry-publish-start" type="datetime-local" disabled></label>
+          <label>公告結束時間（可留空）<input id="entry-publish-end" type="datetime-local" disabled></label>
+        </div>
+        <p class="form-note">開始時間留空代表立即顯示；結束時間留空代表持續公告。</p>
+      </fieldset>
       <div class="form-actions">
         <button type="button" class="button button-secondary" data-close>取消</button>
         <button id="save-draft" type="button" class="button button-secondary">儲存草稿</button>
