@@ -26,6 +26,7 @@ const state = {
   entries: [],
   links: [],
   tags: [],
+  templates: [],
   settings: { title: "台中市清水國小 一年戊班 電子聯絡簿", subtitle: "115 學年度" },
   selectedDate: todayKey(),
   calendarDate: new Date()
@@ -253,12 +254,68 @@ function renderTags() {
   });
 }
 
+function renderTemplates() {
+  const select = $("#entry-template");
+  const currentValue = select.value;
+  select.replaceChildren();
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = state.templates.length ? "請選擇範本" : "目前沒有範本";
+  select.append(placeholder);
+
+  state.templates.forEach(template => {
+    const option = document.createElement("option");
+    option.value = template.id;
+    option.textContent = template.name;
+    select.append(option);
+  });
+  if (state.templates.some(template => template.id === currentValue)) select.value = currentValue;
+  $("#apply-template").disabled = !state.templates.length;
+
+  const list = $("#template-manage-list");
+  list.replaceChildren();
+  if (!state.templates.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "目前沒有常用範本";
+    list.append(empty);
+    return;
+  }
+
+  state.templates.forEach(template => {
+    const row = document.createElement("div");
+    row.className = "manage-row template-row";
+    const text = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = template.name;
+    const preview = document.createElement("small");
+    preview.textContent = template.content;
+    text.append(name, preview);
+
+    const actions = document.createElement("div");
+    actions.className = "manage-actions";
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.textContent = "修改";
+    edit.addEventListener("click", () => editTemplate(template.id));
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "刪除";
+    remove.addEventListener("click", () => removeDoc("templates", template.id, "範本"));
+    actions.append(edit, remove);
+    row.append(text, actions);
+    list.append(row);
+  });
+}
+
 function editEntry(id) {
   const entry = state.entries.find(item => item.id === id);
   if (!entry) return;
   $("#entry-dialog-title").textContent = "修改聯絡簿";
   $("#entry-id").value = id;
   $("#entry-date").value = entry.date;
+  $("#entry-template").value = "";
   $("#entry-content").value = entry.content;
   document.querySelectorAll('input[name="entry-tags"]').forEach(input => { input.checked = (entry.tags || []).includes(input.value); });
   openDialog("entry-dialog");
@@ -272,12 +329,31 @@ function copyEntry(id) {
   $("#entry-form").reset();
   $("#entry-id").value = "";
   $("#entry-date").value = todayKey();
+  $("#entry-template").value = "";
   $("#entry-content").value = entry.content || "";
   document.querySelectorAll('input[name="entry-tags"]').forEach(input => {
     input.checked = (entry.tags || []).includes(input.value);
   });
   $("#entry-dialog-title").textContent = "複製聯絡簿";
   openDialog("entry-dialog");
+}
+
+function editTemplate(id) {
+  const template = state.templates.find(item => item.id === id);
+  if (!template || !isAdmin()) return;
+  $("#template-id").value = id;
+  $("#template-name").value = template.name;
+  $("#template-content").value = template.content;
+  $("#template-submit").textContent = "儲存修改";
+  $("#template-cancel-edit").classList.remove("hidden");
+  $("#template-name").focus();
+}
+
+function resetTemplateForm() {
+  $("#template-form").reset();
+  $("#template-id").value = "";
+  $("#template-submit").textContent = "新增範本";
+  $("#template-cancel-edit").classList.add("hidden");
 }
 
 function editLink(id) {
@@ -316,6 +392,11 @@ function subscribeData() {
     renderTags(); renderEntries();
   }, error => showToast(`標籤載入失敗：${error.message}`, true));
 
+  onSnapshot(query(collection(db, "templates"), orderBy("name")), snapshot => {
+    state.templates = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+    renderTemplates();
+  }, error => showToast(`常用範本載入失敗：${error.message}`, true));
+
   onSnapshot(doc(db, "settings", "main"), snapshot => {
     if (snapshot.exists()) state.settings = { ...state.settings, ...snapshot.data() };
     renderHeader();
@@ -329,6 +410,7 @@ document.querySelectorAll("[data-open]").forEach(button => button.addEventListen
     $("#entry-form").reset();
     $("#entry-id").value = "";
     $("#entry-date").value = state.selectedDate || todayKey();
+    $("#entry-template").value = "";
     $("#entry-dialog-title").textContent = "新增聯絡簿";
   }
   if (id === "link-dialog") {
@@ -340,6 +422,7 @@ document.querySelectorAll("[data-open]").forEach(button => button.addEventListen
     $("#settings-title").value = state.settings.title;
     $("#settings-subtitle").value = state.settings.subtitle;
   }
+  if (id === "template-dialog") resetTemplateForm();
   openDialog(id);
 }));
 
@@ -382,6 +465,36 @@ $("#entry-form").addEventListener("submit", async event => {
     showToast(id ? "聯絡簿已更新" : "聯絡簿已新增");
   } catch (error) { showToast(`儲存失敗：${error.message}`, true); }
 });
+
+$("#apply-template").addEventListener("click", () => {
+  const template = state.templates.find(item => item.id === $("#entry-template").value);
+  if (!template) return showToast("請先選擇一個範本", true);
+  const content = $("#entry-content").value.trim();
+  if (content && !confirm("套用範本會取代目前的聯絡簿內容，確定要繼續嗎？")) return;
+  $("#entry-content").value = template.content;
+  $("#entry-content").focus();
+  showToast(`已套用「${template.name}」`);
+});
+
+$("#template-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!isAdmin()) return;
+  const id = $("#template-id").value;
+  const name = $("#template-name").value.trim();
+  const content = $("#template-content").value.trim();
+  if (state.templates.some(template => template.name === name && template.id !== id)) {
+    return showToast("範本名稱已存在", true);
+  }
+  const data = { name, content, updatedAt: serverTimestamp() };
+  try {
+    if (id) await updateDoc(doc(db, "templates", id), data);
+    else await addDoc(collection(db, "templates"), { ...data, createdAt: serverTimestamp() });
+    resetTemplateForm();
+    showToast(id ? "範本已更新" : "範本已新增");
+  } catch (error) { showToast(`範本儲存失敗：${error.message}`, true); }
+});
+
+$("#template-cancel-edit").addEventListener("click", resetTemplateForm);
 
 $("#link-form").addEventListener("submit", async event => {
   event.preventDefault();

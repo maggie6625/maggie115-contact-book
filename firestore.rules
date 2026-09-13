@@ -22,6 +22,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /templates/{templateId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin();

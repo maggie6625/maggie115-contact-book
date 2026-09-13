@@ -28,6 +28,7 @@
     <button data-open="entry-dialog">＋ 新增聯絡簿</button>
     <button data-open="link-dialog">＋ 新增資源</button>
     <button data-open="tag-dialog">標籤管理</button>
+    <button data-open="template-dialog">常用範本</button>
     <button data-open="settings-dialog">網站設定</button>
   </nav>
 
@@ -94,6 +95,10 @@
       <div class="modal-heading"><h2 id="entry-dialog-title">新增聯絡簿</h2><button type="button" class="close-button" data-close aria-label="關閉">×</button></div>
       <input id="entry-id" type="hidden">
       <label>日期<input id="entry-date" type="date" required></label>
+      <div class="template-picker">
+        <label>套用常用範本<select id="entry-template"><option value="">目前沒有範本</option></select></label>
+        <button id="apply-template" type="button" class="button button-secondary" disabled>套用</button>
+      </div>
       <label>聯絡簿內容<textarea id="entry-content" rows="9" placeholder="例如：&#10;1. 國語習作第 20 頁&#10;2. 數學練習一張&#10;3. 明天帶水壺" required></textarea></label>
       <fieldset><legend>標籤</legend><div id="entry-tag-options" class="check-grid"></div></fieldset>
       <div class="form-actions"><button type="button" class="button button-secondary" data-close>取消</button><button class="button button-primary">儲存</button></div>
@@ -121,6 +126,22 @@
         <button class="button button-primary">新增</button>
       </form>
       <div id="tag-manage-list" class="manage-list"></div>
+    </div>
+  </dialog>
+
+  <dialog id="template-dialog" class="modal">
+    <div class="modal-card modal-wide">
+      <div class="modal-heading"><h2>常用內容範本</h2><button type="button" class="close-button" data-close aria-label="關閉">×</button></div>
+      <form id="template-form" class="template-form">
+        <input id="template-id" type="hidden">
+        <label>範本名稱<input id="template-name" type="text" maxlength="30" placeholder="例如：每日基本格式" required></label>
+        <label>範本內容<textarea id="template-content" rows="7" placeholder="例如：&#10;📖 今日作業&#10;國語：&#10;數學：&#10;&#10;📌 明日攜帶：" required></textarea></label>
+        <div class="form-actions">
+          <button id="template-cancel-edit" type="button" class="button button-secondary hidden">取消修改</button>
+          <button id="template-submit" class="button button-primary">新增範本</button>
+        </div>
+      </form>
+      <div id="template-manage-list" class="manage-list"></div>
     </div>
   </dialog>
 
