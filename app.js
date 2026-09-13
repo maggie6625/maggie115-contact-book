@@ -26,7 +26,7 @@ const state = {
   entries: [],
   links: [],
   tags: [],
-  settings: { title: "Maggie 115 電子聯絡簿", subtitle: "115 學年度" },
+  settings: { title: "台中市清水國小 一年戊班 電子聯絡簿", subtitle: "115 學年度" },
   selectedDate: todayKey(),
   calendarDate: new Date()
 };
