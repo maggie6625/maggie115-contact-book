@@ -1,5 +1,5 @@
 # Maggie 115 電子聯絡簿
-
+ 
 這是一個使用 GitHub Pages 與 Firebase 製作的電子聯絡簿。家長可以公開閱讀，只有指定的 Firebase 管理員帳號可以新增、修改或刪除資料。
 
 目前連接的 Firebase 專案：`maggie115-contact-book`
