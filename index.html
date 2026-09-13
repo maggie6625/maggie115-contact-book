@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173c2c">
+  <title>Maggie 115 電子聯絡簿</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">✎</span>
+      <div>
+        <p class="eyebrow">115 學年度</p>
+        <h1 id="site-title">Maggie 115 電子聯絡簿</h1>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span id="user-badge" class="user-badge hidden"></span>
+      <button id="login-button" class="button button-light">老師登入</button>
+      <button id="logout-button" class="button button-light hidden">登出</button>
+    </div>
+  </header>
+
+  <nav id="admin-bar" class="admin-bar hidden" aria-label="管理功能">
+    <strong>管理模式</strong>
+    <button data-open="entry-dialog">＋ 新增聯絡簿</button>
+    <button data-open="link-dialog">＋ 新增資源</button>
+    <button data-open="tag-dialog">標籤管理</button>
+    <button data-open="settings-dialog">網站設定</button>
+  </nav>
+
+  <main class="page-shell">
+    <section class="panel resources-panel" aria-labelledby="resources-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">RESOURCE BOARD</p>
+          <h2 id="resources-title">📁 重要文件與網站</h2>
+        </div>
+      </div>
+      <div id="resource-list" class="resource-grid">
+        <p class="empty-state">正在載入…</p>
+      </div>
+    </section>
+
+    <div class="content-grid">
+      <section class="panel entries-panel" aria-labelledby="entries-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker">CONTACT BOOK</p>
+            <h2 id="entries-title">📖 今日交代功課</h2>
+          </div>
+          <button id="clear-filter" class="text-button hidden">顯示全部</button>
+        </div>
+        <p id="filter-label" class="filter-label"></p>
+        <div id="entry-list" class="entry-list">
+          <p class="empty-state">正在載入…</p>
+        </div>
+      </section>
+
+      <aside class="panel calendar-panel" aria-label="聯絡簿月曆">
+        <div class="calendar-heading">
+          <button id="prev-month" class="icon-button" aria-label="上個月">‹</button>
+          <h2 id="calendar-title"></h2>
+          <button id="next-month" class="icon-button" aria-label="下個月">›</button>
+        </div>
+        <div class="weekday-row" aria-hidden="true">
+          <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+        </div>
+        <div id="calendar-grid" class="calendar-grid"></div>
+        <div class="calendar-help">
+          <span><i class="dot"></i> 當日有聯絡簿</span>
+          <span>點擊日期可篩選內容</span>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <footer>© <span id="footer-year"></span> Maggie 115 電子聯絡簿</footer>
+
+  <dialog id="login-dialog" class="modal">
+    <form id="login-form" class="modal-card">
+      <div class="modal-heading"><h2>老師登入</h2><button type="button" class="close-button" data-close aria-label="關閉">×</button></div>
+      <label>電子郵件<input id="login-email" type="email" autocomplete="username" required></label>
+      <label>密碼<input id="login-password" type="password" autocomplete="current-password" required></label>
+      <p class="form-note">只有指定的管理員帳號可以修改內容。</p>
+      <div class="form-actions"><button type="button" class="button button-secondary" data-close>取消</button><button class="button button-primary">登入</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="entry-dialog" class="modal">
+    <form id="entry-form" class="modal-card modal-wide">
+      <div class="modal-heading"><h2 id="entry-dialog-title">新增聯絡簿</h2><button type="button" class="close-button" data-close aria-label="關閉">×</button></div>
+      <input id="entry-id" type="hidden">
+      <label>日期<input id="entry-date" type="date" required></label>
+      <label>聯絡簿內容<textarea id="entry-content" rows="9" placeholder="例如：&#10;1. 國語習作第 20 頁&#10;2. 數學練習一張&#10;3. 明天帶水壺" required></textarea></label>
+      <fieldset><legend>標籤</legend><div id="entry-tag-options" class="check-grid"></div></fieldset>
+      <div class="form-actions"><button type="button" class="button button-secondary" data-close>取消</button><button class="button button-primary">儲存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="link-dialog" class="modal">
+    <form id="link-form" class="modal-card">
+      <div class="modal-heading"><h2 id="link-dialog-title">新增資源</h2><button type="button" class="close-button" data-close aria-label="關閉">×</button></div>
+      <input id="link-id" type="hidden">
+      <label>名稱<input id="link-title" type="text" placeholder="例如：本學期行事曆" required></label>
+      <label>網址<input id="link-url" type="url" placeholder="https://…" required></label>
+      <label>類型<select id="link-type"><option value="document">文件</option><option value="website">網站</option></select></label>
+      <label>到期日（可留空）<input id="link-expire-date" type="date"></label>
+      <div class="form-actions"><button type="button" class="button button-secondary" data-close>取消</button><button class="button button-primary">儲存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="tag-dialog" class="modal">
+    <div class="modal-card">
+      <div class="modal-heading"><h2>標籤管理</h2><button type="button" class="close-button" data-close aria-label="關閉">×</button></div>
+      <form id="tag-form" class="inline-form">
+        <input id="tag-name" type="text" placeholder="標籤名稱" maxlength="12" required>
+        <input id="tag-color" type="color" value="#f9a8d4" aria-label="標籤顏色">
+        <button class="button button-primary">新增</button>
+      </form>
+      <div id="tag-manage-list" class="manage-list"></div>
+    </div>
+  </dialog>
+
+  <dialog id="settings-dialog" class="modal">
+    <form id="settings-form" class="modal-card">
+      <div class="modal-heading"><h2>網站設定</h2><button type="button" class="close-button" data-close aria-label="關閉">×</button></div>
+      <label>網站名稱<input id="settings-title" type="text" maxlength="40" required></label>
+      <label>頁首小標題<input id="settings-subtitle" type="text" maxlength="30" placeholder="115 學年度"></label>
+      <div class="form-actions"><button type="button" class="button button-secondary" data-close>取消</button><button class="button button-primary">儲存</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

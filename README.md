@@ -1,0 +1,38 @@
+# Maggie 115 電子聯絡簿
+
+這是一個使用 GitHub Pages 與 Firebase 製作的電子聯絡簿。家長可以公開閱讀，只有指定的 Firebase 管理員帳號可以新增、修改或刪除資料。
+
+## 檔案
+
+- `index.html`：頁面結構
+- `styles.css`：黑板風格與手機版面
+- `app.js`：Firebase 登入、Firestore、月曆與管理功能
+
+## 發布到 GitHub Pages
+
+1. 在 GitHub 建立新的公開儲存庫，例如 `maggie115-contact-book`。
+2. 將本資料夾內的三個網站檔案與本說明上傳到儲存庫根目錄。
+3. 開啟儲存庫的 `Settings → Pages`。
+4. 在 `Build and deployment` 選擇 `Deploy from a branch`。
+5. 選擇 `main` 與 `/ (root)`，然後儲存。
+
+網站網址將類似：
+
+`https://你的帳號.github.io/maggie115-contact-book/`
+
+## 重要安全設定
+
+- Authentication 必須啟用「電子郵件地址／密碼」。
+- Firestore 必須使用專用安全規則，並限制管理員 UID。
+- 不要在網站中張貼學生電話、地址、身分證字號或其他敏感個資。
+- 若更換 Firebase 管理員，必須同步修改 `app.js` 的 `ADMIN_UID` 與 Firestore Rules。
+
+## 本機測試
+
+Firebase 模組不能直接以 `file://` 穩定執行。可在此資料夾啟動簡單的 HTTP 伺服器：
+
+```bash
+python -m http.server 8080
+```
+
+再開啟 `http://localhost:8080`。
