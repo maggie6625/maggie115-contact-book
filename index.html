@@ -30,6 +30,7 @@
     <button data-open="tag-dialog">標籤管理</button>
     <button data-open="template-dialog">常用範本</button>
     <button data-open="timetable-dialog">功課表管理</button>
+    <button data-open="event-dialog">＋ 新增行事曆活動</button>
     <button data-open="settings-dialog">網站設定</button>
   </nav>
 
@@ -37,6 +38,7 @@
     <nav class="page-tabs" aria-label="主要內容">
       <button type="button" class="page-tab active" data-page="contact">📖 電子聯絡簿</button>
       <button type="button" class="page-tab" data-page="timetable">📚 班級功課表</button>
+      <button type="button" class="page-tab" data-page="events">📅 班級行事曆</button>
     </nav>
 
     <div id="contact-page" class="page-view">
@@ -108,10 +110,77 @@
           <h2 id="timetable-title">一年戊班功課表</h2>
           <button id="public-edit-timetable" type="button" class="button button-primary hidden">編輯功課表</button>
         </header>
+        <div class="timetable-view-controls" aria-label="功課表顯示設定">
+          <div class="density-controls" role="group" aria-label="編排密度">
+            <span>編排</span>
+            <button type="button" data-density="comfortable">舒適</button>
+            <button type="button" data-density="compact">緊湊</button>
+            <button type="button" data-density="ultra">超緊湊</button>
+          </div>
+          <div class="zoom-controls" role="group" aria-label="縮放比例">
+            <button id="timetable-zoom-out" type="button" aria-label="縮小功課表">－</button>
+            <output id="timetable-zoom-value" aria-live="polite">90%</output>
+            <button id="timetable-zoom-in" type="button" aria-label="放大功課表">＋</button>
+          </div>
+          <button id="timetable-fit" type="button">符合寬度</button>
+          <button id="timetable-reset-view" type="button">還原</button>
+          <button id="timetable-fullscreen" type="button">全螢幕</button>
+        </div>
         <div id="timetable-container" class="timetable-scroll">
           <p class="empty-state">正在載入功課表…</p>
         </div>
         <p id="timetable-updated" class="timetable-updated"></p>
+      </div>
+    </section>
+
+    <section id="events-page" class="page-view hidden" aria-labelledby="events-title">
+      <div class="panel events-panel">
+        <div class="events-heading">
+          <div>
+            <p class="section-kicker">CLASS CALENDAR</p>
+            <h2 id="events-title">📅 班級行事曆</h2>
+          </div>
+          <div class="events-primary-actions">
+            <button id="export-events-ics" type="button" class="button button-secondary">匯出 .ics</button>
+            <button id="add-event-page" type="button" class="button button-primary hidden">＋ 新增活動</button>
+          </div>
+        </div>
+
+        <div id="event-alerts" class="event-alerts"></div>
+
+        <div class="events-toolbar">
+          <div class="events-month-nav">
+            <button id="events-prev-month" type="button" class="icon-button" aria-label="上個月">‹</button>
+            <h3 id="events-month-title"></h3>
+            <button id="events-next-month" type="button" class="icon-button" aria-label="下個月">›</button>
+            <button id="events-today" type="button">今天</button>
+          </div>
+          <div class="events-view-switch" role="group" aria-label="行事曆顯示方式">
+            <button type="button" data-events-view="month" class="active">月曆</button>
+            <button type="button" data-events-view="list">列表</button>
+          </div>
+        </div>
+
+        <div id="events-calendar-view">
+          <div class="events-weekdays" aria-hidden="true"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+          <div id="events-calendar-grid" class="events-calendar-grid"></div>
+        </div>
+        <div id="events-list-view" class="events-list hidden"></div>
+
+        <div class="event-legend" aria-label="活動分類">
+          <span><i class="event-dot category-exam"></i>評量</span>
+          <span><i class="event-dot category-school"></i>學校活動</span>
+          <span><i class="event-dot category-class"></i>班級活動</span>
+          <span><i class="event-dot category-holiday"></i>放假／停課</span>
+          <span><i class="event-dot category-item"></i>攜帶物品</span>
+          <span><i class="event-dot category-other"></i>其他</span>
+        </div>
+
+        <div id="events-admin-tools" class="events-admin-tools hidden">
+          <strong>批次管理</strong>
+          <button id="export-events-csv" type="button" class="button button-secondary">下載 CSV 樣板</button>
+          <label class="button button-secondary file-button">匯入 CSV<input id="import-events-csv" type="file" accept=".csv,text/csv"></label>
+        </div>
       </div>
     </section>
   </main>
@@ -270,6 +339,54 @@
         <button class="button button-primary">儲存並發布功課表</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="event-dialog" class="modal event-modal">
+    <form id="event-form" class="modal-card modal-wide">
+      <div class="modal-heading"><h2 id="event-dialog-title">新增行事曆活動</h2><button type="button" class="close-button" data-close aria-label="關閉">×</button></div>
+      <input id="event-id" type="hidden">
+      <label>活動名稱<input id="event-title-input" type="text" maxlength="60" placeholder="例如：一年級注音符號測驗" required></label>
+      <label>分類
+        <select id="event-category">
+          <option value="exam">評量</option><option value="school">學校活動</option><option value="class">班級活動</option>
+          <option value="holiday">放假／停課</option><option value="item">攜帶物品</option><option value="other">其他</option>
+        </select>
+      </label>
+      <div class="event-date-grid">
+        <label>開始日期<input id="event-start-date" type="date" required></label>
+        <label>結束日期<input id="event-end-date" type="date" required></label>
+      </div>
+      <label class="toggle-label"><input id="event-all-day" type="checkbox" checked> 全天活動</label>
+      <div id="event-time-fields" class="event-date-grid disabled-fields">
+        <label>開始時間<input id="event-start-time" type="time" disabled></label>
+        <label>結束時間<input id="event-end-time" type="time" disabled></label>
+      </div>
+      <label>說明<textarea id="event-description" rows="4" maxlength="1000" placeholder="活動內容、準備事項或提醒"></textarea></label>
+      <label>相關連結（可留空）<input id="event-link" type="url" placeholder="https://..."></label>
+      <label class="toggle-label"><input id="event-important" type="checkbox"> 設為重要活動並顯示倒數提醒</label>
+      <fieldset class="event-repeat-settings">
+        <legend>重複活動</legend>
+        <div class="event-date-grid">
+          <label>重複方式
+            <select id="event-repeat"><option value="none">不重複</option><option value="weekly">每週</option><option value="monthly">每月</option></select>
+          </label>
+          <label>重複截止日期<input id="event-repeat-until" type="date" disabled></label>
+        </div>
+        <p class="form-note">每週或每月會依開始日期重複；截止日期必須晚於開始日期。</p>
+      </fieldset>
+      <div class="form-actions">
+        <button type="button" class="button button-secondary" data-close>取消</button>
+        <button class="button button-primary">儲存活動</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="event-detail-dialog" class="modal">
+    <div class="modal-card">
+      <div class="modal-heading"><h2 id="event-detail-title">活動詳情</h2><button type="button" class="close-button" data-close aria-label="關閉">×</button></div>
+      <div id="event-detail-content" class="event-detail-content"></div>
+      <div id="event-detail-actions" class="form-actions"></div>
+    </div>
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

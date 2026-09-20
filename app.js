@@ -78,6 +78,15 @@ function defaultTimetable() {
   };
 }
 
+const EVENT_CATEGORIES = {
+  exam: { label: "評量", icon: "📝" },
+  school: { label: "學校活動", icon: "🏫" },
+  class: { label: "班級活動", icon: "🎈" },
+  holiday: { label: "放假／停課", icon: "🏖️" },
+  item: { label: "攜帶物品", icon: "🎒" },
+  other: { label: "其他", icon: "📌" }
+};
+
 const state = {
   user: null,
   entries: [],
@@ -85,13 +94,27 @@ const state = {
   links: [],
   tags: [],
   templates: [],
+  events: [],
   timetable: defaultTimetable(),
   timetableDraft: null,
   settings: { title: "台中市清水國小 一年戊班 電子聯絡簿", subtitle: "115 學年度" },
   selectedDate: todayKey(),
   calendarDate: new Date(),
+  eventsCalendarDate: new Date(),
+  eventsView: "month",
   entryFilter: "all"
 };
+
+const TIMETABLE_VIEW_DEFAULTS = { density: "compact", zoom: 90 };
+const timetableView = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem("timetableView") || "{}");
+    return {
+      density: ["comfortable", "compact", "ultra"].includes(saved.density) ? saved.density : TIMETABLE_VIEW_DEFAULTS.density,
+      zoom: Math.min(120, Math.max(50, Number(saved.zoom) || TIMETABLE_VIEW_DEFAULTS.zoom))
+    };
+  } catch { return { ...TIMETABLE_VIEW_DEFAULTS }; }
+})();
 
 let unsubscribeDrafts = null;
 
@@ -104,6 +127,66 @@ function todayKey() {
   const m = String(now.getMonth() + 1).padStart(2, "0");
   const d = String(now.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+function dateFromKey(key) {
+  const [year, month, day] = String(key).split("-").map(Number);
+  return new Date(year, month - 1, day, 12);
+}
+
+function dateKeyFromDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function addDaysKey(key, amount) {
+  const date = dateFromKey(key);
+  date.setDate(date.getDate() + amount);
+  return dateKeyFromDate(date);
+}
+
+function daysBetween(startKey, endKey) {
+  return Math.round((dateFromKey(endKey) - dateFromKey(startKey)) / 86400000);
+}
+
+function monthlyOccurrenceKey(anchorKey, offset) {
+  const anchor = dateFromKey(anchorKey);
+  const first = new Date(anchor.getFullYear(), anchor.getMonth() + offset, 1, 12);
+  const lastDay = new Date(first.getFullYear(), first.getMonth() + 1, 0, 12).getDate();
+  if (anchor.getDate() > lastDay) return "";
+  return dateKeyFromDate(new Date(first.getFullYear(), first.getMonth(), anchor.getDate(), 12));
+}
+
+function eventOccurrences(event, rangeStart, rangeEnd) {
+  if (!event.startDate) return [];
+  const startDate = event.startDate;
+  const duration = Math.max(0, daysBetween(startDate, event.endDate || startDate));
+  const repeat = ["weekly", "monthly"].includes(event.repeat) ? event.repeat : "none";
+  const repeatUntil = repeat === "none" ? startDate : (event.repeatUntil || startDate);
+  const occurrences = [];
+  for (let index = 0; index < 600; index += 1) {
+    const current = repeat === "weekly" ? addDaysKey(startDate, index * 7)
+      : repeat === "monthly" ? monthlyOccurrenceKey(startDate, index)
+        : startDate;
+    if (!current) continue;
+    if (current > repeatUntil || current > rangeEnd) break;
+    const occurrenceEnd = addDaysKey(current, duration);
+    if (occurrenceEnd >= rangeStart) occurrences.push({ event, occurrenceStart: current, occurrenceEnd });
+    if (repeat === "none") break;
+  }
+  return occurrences;
+}
+
+function occurrencesInRange(rangeStart, rangeEnd, events = state.events) {
+  return events.flatMap(event => eventOccurrences(event, rangeStart, rangeEnd))
+    .sort((a, b) => `${a.occurrenceStart}${a.event.startTime || ""}${a.event.title || ""}`
+      .localeCompare(`${b.occurrenceStart}${b.event.startTime || ""}${b.event.title || ""}`));
+}
+
+function eventDateLabel(occurrence) {
+  const { event, occurrenceStart, occurrenceEnd } = occurrence;
+  const dateLabel = occurrenceStart === occurrenceEnd ? formatDate(occurrenceStart) : `${formatDate(occurrenceStart)} ～ ${formatDate(occurrenceEnd)}`;
+  if (event.allDay !== false) return `${dateLabel}・全天`;
+  return `${dateLabel}・${event.startTime || ""}${event.endTime ? `～${event.endTime}` : ""}`;
 }
 
 function showToast(message, error = false) {
@@ -196,6 +279,75 @@ function closeDialog(dialog) {
   if (dialog?.open) dialog.close();
 }
 
+function saveTimetableView() {
+  try { localStorage.setItem("timetableView", JSON.stringify(timetableView)); } catch { /* 瀏覽器拒絕儲存時仍可使用 */ }
+}
+
+function applyTimetableViewSettings() {
+  const shell = $("#timetable-shell");
+  if (!shell) return;
+  shell.classList.remove("density-comfortable", "density-compact", "density-ultra");
+  shell.classList.add(`density-${timetableView.density}`);
+  shell.style.setProperty("--tt-zoom", String(timetableView.zoom / 100));
+  $("#timetable-zoom-value").textContent = `${Math.round(timetableView.zoom)}%`;
+  document.querySelectorAll("[data-density]").forEach(button => {
+    const active = button.dataset.density === timetableView.density;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  $("#timetable-zoom-out").disabled = timetableView.zoom <= 50;
+  $("#timetable-zoom-in").disabled = timetableView.zoom >= 120;
+}
+
+function setTimetableZoom(value, persist = true) {
+  timetableView.zoom = Math.min(120, Math.max(50, Math.round(Number(value) / 5) * 5));
+  applyTimetableViewSettings();
+  if (persist) saveTimetableView();
+}
+
+function fitTimetableWidth() {
+  const container = $("#timetable-container");
+  const table = container?.querySelector(".timetable-table");
+  if (!container || !table) return;
+  const shell = $("#timetable-shell");
+  shell.style.setProperty("--tt-zoom", "1");
+  void table.offsetWidth;
+  const fitted = Math.floor(((container.clientWidth - 8) / table.scrollWidth) * 100 / 5) * 5;
+  setTimetableZoom(fitted);
+  container.scrollLeft = 0;
+}
+
+function timetableIsFullscreen() {
+  const shell = $("#timetable-shell");
+  return document.fullscreenElement === shell || document.webkitFullscreenElement === shell || shell.classList.contains("pseudo-fullscreen");
+}
+
+function updateFullscreenButton() {
+  $("#timetable-fullscreen").textContent = timetableIsFullscreen() ? "離開全螢幕" : "全螢幕";
+}
+
+async function toggleTimetableFullscreen() {
+  const shell = $("#timetable-shell");
+  if (timetableIsFullscreen()) {
+    if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+    else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
+    else {
+      shell.classList.remove("pseudo-fullscreen");
+      document.body.classList.remove("no-scroll");
+    }
+  } else {
+    try {
+      if (shell.requestFullscreen) await shell.requestFullscreen();
+      else if (shell.webkitRequestFullscreen) shell.webkitRequestFullscreen();
+      else throw new Error("fullscreen unsupported");
+    } catch {
+      shell.classList.add("pseudo-fullscreen");
+      document.body.classList.add("no-scroll");
+    }
+  }
+  updateFullscreenButton();
+}
+
 function cloneTimetable(source = state.timetable) {
   return {
     title: source.title || "一年戊班課表",
@@ -243,7 +395,8 @@ function courseIcon(subject = "") {
 function renderTimetable() {
   const timetable = normalizeTimetable(state.timetable);
   const shell = $("#timetable-shell");
-  shell.className = `timetable-shell theme-${timetable.theme}`;
+  const keepPseudoFullscreen = shell.classList.contains("pseudo-fullscreen");
+  shell.className = `timetable-shell theme-${timetable.theme}${keepPseudoFullscreen ? " pseudo-fullscreen" : ""}`;
   $("#timetable-title").textContent = timetable.title;
   $("#timetable-subtitle").textContent = timetable.subtitle;
   $(".timetable-decoration").textContent = ({
@@ -323,6 +476,7 @@ function renderTimetable() {
   });
   table.append(tbody);
   container.replaceChildren(table);
+  applyTimetableViewSettings();
 
   const updated = state.timetable.updatedAt?.toDate?.();
   $("#timetable-updated").textContent = updated
@@ -531,6 +685,109 @@ function importTimetableCSV(text) {
   });
   renderTimetableEditor();
   showToast("CSV 已匯入，請確認後儲存");
+}
+
+function exportEventsCSV() {
+  const header = ["活動名稱", "分類", "開始日期", "結束日期", "全天", "開始時間", "結束時間", "說明", "連結", "重要", "重複", "重複截止日"];
+  const rows = state.events.map(event => [
+    event.title, eventCategory(event).label, event.startDate, event.endDate || event.startDate,
+    event.allDay !== false ? "是" : "否", event.startTime || "", event.endTime || "", event.description || "", event.link || "",
+    event.important ? "是" : "否", event.repeat === "weekly" ? "每週" : event.repeat === "monthly" ? "每月" : "不重複", event.repeatUntil || ""
+  ]);
+  const csv = "\uFEFF" + [header, ...rows].map(row => row.map(csvEscape).join(",")).join("\r\n");
+  downloadBlob(csv, "一年戊班行事曆樣板.csv", "text/csv;charset=utf-8");
+  showToast("行事曆 CSV 已下載");
+}
+
+function normalizeCSVCategory(value) {
+  const map = { 評量: "exam", 學校活動: "school", 班級活動: "class", "放假／停課": "holiday", "放假/停課": "holiday", 攜帶物品: "item", 其他: "other" };
+  return EVENT_CATEGORIES[value] ? value : (map[value] || "other");
+}
+
+function normalizeCSVRepeat(value) {
+  const map = { 每週: "weekly", 每月: "monthly", 不重複: "none", none: "none", weekly: "weekly", monthly: "monthly" };
+  return map[value] || "none";
+}
+
+async function importEventsCSV(text) {
+  const rows = parseCSV(text.replace(/^\uFEFF/, ""));
+  const expected = ["活動名稱", "分類", "開始日期", "結束日期", "全天", "開始時間", "結束時間", "說明", "連結", "重要", "重複", "重複截止日"];
+  if (!rows.length || expected.some((name, index) => rows[0][index]?.trim() !== name)) throw new Error("CSV 欄位名稱或順序不正確，請使用網站下載的樣板");
+  const imported = [];
+  rows.slice(1).forEach((row, index) => {
+    if (!row[0]?.trim()) return;
+    const repeat = normalizeCSVRepeat(row[10]?.trim());
+    const item = {
+      title: row[0].trim(), category: normalizeCSVCategory(row[1]?.trim()),
+      startDate: row[2]?.trim(), endDate: row[3]?.trim() || row[2]?.trim(),
+      allDay: row[4]?.trim() !== "否", startTime: row[5]?.trim() || "", endTime: row[6]?.trim() || "",
+      description: row[7]?.trim() || "", link: row[8]?.trim() || "", important: row[9]?.trim() === "是",
+      repeat, repeatUntil: repeat === "none" ? "" : row[11]?.trim(), createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+    };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(item.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(item.endDate) || item.endDate < item.startDate) {
+      throw new Error(`第 ${index + 2} 列日期格式錯誤`);
+    }
+    if (item.repeat !== "none" && (!item.repeatUntil || item.repeatUntil < item.startDate)) throw new Error(`第 ${index + 2} 列重複截止日錯誤`);
+    if (item.link && safeUrl(item.link) === "#") throw new Error(`第 ${index + 2} 列連結格式錯誤`);
+    imported.push(item);
+  });
+  if (!imported.length) throw new Error("CSV 沒有可匯入的活動");
+  if (imported.length > 200) throw new Error("一次最多匯入 200 筆活動");
+  const batch = writeBatch(db);
+  imported.forEach(item => batch.set(doc(collection(db, "events")), item));
+  await batch.commit();
+  showToast(`已匯入 ${imported.length} 筆行事曆活動`);
+}
+
+function downloadBlob(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename.replace(/[\\/:*?"<>|]/g, "-");
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 0);
+}
+
+function icsEscape(value = "") {
+  return String(value).replaceAll("\\", "\\\\").replaceAll(";", "\\;").replaceAll(",", "\\,").replace(/\r?\n/g, "\\n");
+}
+
+function icsDate(value) {
+  return String(value).replaceAll("-", "");
+}
+
+function icsUtc(date, time = "00:00") {
+  const parsed = new Date(`${date}T${time || "00:00"}:00+08:00`);
+  return parsed.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function eventToICS(event) {
+  const lines = ["BEGIN:VEVENT", `UID:${icsEscape(event.id || `${event.startDate}-${event.title}`)}@maggie115-contact-book`, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")}`];
+  if (event.allDay !== false) {
+    lines.push(`DTSTART;VALUE=DATE:${icsDate(event.startDate)}`);
+    lines.push(`DTEND;VALUE=DATE:${icsDate(addDaysKey(event.endDate || event.startDate, 1))}`);
+  } else {
+    lines.push(`DTSTART:${icsUtc(event.startDate, event.startTime || "00:00")}`);
+    lines.push(`DTEND:${icsUtc(event.endDate || event.startDate, event.endTime || event.startTime || "00:00")}`);
+  }
+  if (["weekly", "monthly"].includes(event.repeat) && event.repeatUntil) {
+    const frequency = event.repeat === "weekly" ? "WEEKLY" : "MONTHLY";
+    const until = event.allDay !== false ? icsDate(event.repeatUntil) : icsUtc(event.repeatUntil, "23:59");
+    lines.push(`RRULE:FREQ=${frequency};UNTIL=${until}`);
+  }
+  lines.push(`SUMMARY:${icsEscape(event.title)}`);
+  lines.push(`CATEGORIES:${icsEscape(eventCategory(event).label)}`);
+  if (event.description) lines.push(`DESCRIPTION:${icsEscape(event.description)}`);
+  if (event.link && safeUrl(event.link) !== "#") lines.push(`URL:${event.link}`);
+  lines.push("END:VEVENT");
+  return lines.join("\r\n");
+}
+
+function downloadEventsICS(events = state.events, filename = "一年戊班行事曆.ics") {
+  if (!events.length) return showToast("目前沒有可匯出的活動", true);
+  const content = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//清水國小一年戊班//班級行事曆//ZH-TW", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:一年戊班行事曆", ...events.map(eventToICS), "END:VCALENDAR"].join("\r\n");
+  downloadBlob(`${content}\r\n`, filename, "text/calendar;charset=utf-8");
+  showToast(".ics 行事曆已下載");
 }
 
 function renderHeader() {
@@ -775,6 +1032,240 @@ function renderCalendar() {
     });
     grid.append(button);
   }
+}
+
+function eventCategory(event) {
+  return EVENT_CATEGORIES[event.category] || EVENT_CATEGORIES.other;
+}
+
+function makeEventChip(occurrence, compact = false) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `event-chip category-${occurrence.event.category || "other"}${occurrence.event.important ? " important" : ""}`;
+  button.title = eventDateLabel(occurrence);
+  const prefix = occurrence.event.important ? "★ " : (occurrence.event.repeat && occurrence.event.repeat !== "none" ? "↻ " : "");
+  const time = !compact && occurrence.event.allDay === false && occurrence.event.startTime ? `${occurrence.event.startTime} ` : "";
+  button.textContent = `${prefix}${time}${occurrence.event.title}`;
+  button.addEventListener("click", event => {
+    event.stopPropagation();
+    showEventDetails(occurrence);
+  });
+  return button;
+}
+
+function renderEventAlerts() {
+  const container = $("#event-alerts");
+  const today = todayKey();
+  const upcoming = occurrencesInRange(today, addDaysKey(today, 30))
+    .filter(item => item.event.important)
+    .slice(0, 4);
+  container.replaceChildren();
+  container.classList.toggle("hidden", !upcoming.length);
+  upcoming.forEach(occurrence => {
+    const days = daysBetween(today, occurrence.occurrenceStart);
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = `event-alert-card category-${occurrence.event.category || "other"}`;
+    const countdown = document.createElement("strong");
+    countdown.textContent = days < 0 ? "進行中" : days === 0 ? "今天" : days === 1 ? "明天" : `${days} 天後`;
+    const title = document.createElement("span");
+    title.textContent = occurrence.event.title;
+    card.append(countdown, title);
+    card.addEventListener("click", () => showEventDetails(occurrence));
+    container.append(card);
+  });
+}
+
+function renderEventsCalendar() {
+  const year = state.eventsCalendarDate.getFullYear();
+  const month = state.eventsCalendarDate.getMonth();
+  $("#events-month-title").textContent = `民國 ${year - 1911} 年 ${month + 1} 月`;
+  const monthStart = new Date(year, month, 1, 12);
+  const calendarStart = new Date(year, month, 1 - monthStart.getDay(), 12);
+  const monthEnd = new Date(year, month + 1, 0, 12);
+  const cells = Math.ceil((monthStart.getDay() + monthEnd.getDate()) / 7) * 7;
+  const calendarEnd = new Date(calendarStart);
+  calendarEnd.setDate(calendarEnd.getDate() + cells - 1);
+  const rangeStart = dateKeyFromDate(calendarStart);
+  const rangeEnd = dateKeyFromDate(calendarEnd);
+  const occurrences = occurrencesInRange(rangeStart, rangeEnd);
+  const grid = $("#events-calendar-grid");
+  grid.replaceChildren();
+
+  for (let index = 0; index < cells; index += 1) {
+    const date = new Date(calendarStart);
+    date.setDate(date.getDate() + index);
+    const key = dateKeyFromDate(date);
+    const day = document.createElement("article");
+    day.className = "events-day";
+    if (date.getMonth() !== month) day.classList.add("outside-month");
+    if (key === todayKey()) day.classList.add("today");
+    const dayButton = document.createElement("button");
+    dayButton.type = "button";
+    dayButton.className = "events-day-number";
+    dayButton.textContent = date.getDate();
+    dayButton.title = "查看當日聯絡簿";
+    dayButton.addEventListener("click", () => showContactBookDate(key));
+    day.append(dayButton);
+    const list = document.createElement("div");
+    list.className = "events-day-items";
+    occurrences.filter(item => key >= item.occurrenceStart && key <= item.occurrenceEnd)
+      .slice(0, 4).forEach(item => list.append(makeEventChip(item, true)));
+    const count = occurrences.filter(item => key >= item.occurrenceStart && key <= item.occurrenceEnd).length;
+    if (count > 4) {
+      const more = document.createElement("span");
+      more.className = "event-more";
+      more.textContent = `還有 ${count - 4} 項`;
+      list.append(more);
+    }
+    day.append(list);
+    grid.append(day);
+  }
+}
+
+function renderEventsList() {
+  const year = state.eventsCalendarDate.getFullYear();
+  const month = state.eventsCalendarDate.getMonth();
+  const start = dateKeyFromDate(new Date(year, month, 1, 12));
+  const end = dateKeyFromDate(new Date(year, month + 1, 0, 12));
+  const occurrences = occurrencesInRange(start, end);
+  const container = $("#events-list-view");
+  container.replaceChildren();
+  if (!occurrences.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "本月目前沒有活動";
+    container.append(empty);
+    return;
+  }
+  occurrences.forEach(occurrence => {
+    const card = document.createElement("article");
+    card.className = `event-list-card category-${occurrence.event.category || "other"}`;
+    const date = document.createElement("div");
+    date.className = "event-list-date";
+    const dateObj = dateFromKey(occurrence.occurrenceStart);
+    const day = document.createElement("strong");
+    day.textContent = String(dateObj.getDate());
+    const weekday = document.createElement("span");
+    weekday.textContent = `週${["日", "一", "二", "三", "四", "五", "六"][dateObj.getDay()]}`;
+    date.append(day, weekday);
+    const body = document.createElement("button");
+    body.type = "button";
+    body.className = "event-list-body";
+    const title = document.createElement("strong");
+    title.textContent = `${occurrence.event.important ? "★ " : ""}${eventCategory(occurrence.event).icon} ${occurrence.event.title}`;
+    const meta = document.createElement("span");
+    meta.textContent = eventDateLabel(occurrence);
+    body.append(title, meta);
+    body.addEventListener("click", () => showEventDetails(occurrence));
+    card.append(date, body);
+    container.append(card);
+  });
+}
+
+function renderEvents() {
+  $("#add-event-page").classList.toggle("hidden", !isAdmin());
+  $("#events-admin-tools").classList.toggle("hidden", !isAdmin());
+  $("#events-calendar-view").classList.toggle("hidden", state.eventsView !== "month");
+  $("#events-list-view").classList.toggle("hidden", state.eventsView !== "list");
+  document.querySelectorAll("[data-events-view]").forEach(button => button.classList.toggle("active", button.dataset.eventsView === state.eventsView));
+  renderEventAlerts();
+  renderEventsCalendar();
+  renderEventsList();
+}
+
+function repeatLabel(event) {
+  if (event.repeat === "weekly") return `每週重複至 ${event.repeatUntil}`;
+  if (event.repeat === "monthly") return `每月重複至 ${event.repeatUntil}`;
+  return "不重複";
+}
+
+function showEventDetails(occurrence) {
+  const event = occurrence.event;
+  $("#event-detail-title").textContent = event.title;
+  const content = $("#event-detail-content");
+  content.replaceChildren();
+  const category = document.createElement("span");
+  category.className = `event-category-badge category-${event.category || "other"}`;
+  category.textContent = `${eventCategory(event).icon} ${eventCategory(event).label}${event.important ? "・重要活動" : ""}`;
+  const date = document.createElement("p");
+  date.textContent = eventDateLabel(occurrence);
+  const repeat = document.createElement("p");
+  repeat.textContent = `重複：${repeatLabel(event)}`;
+  content.append(category, date, repeat);
+  if (event.description) {
+    const description = document.createElement("p");
+    description.className = "event-detail-description";
+    appendLinkedContent(description, event.description);
+    content.append(description);
+  }
+  if (event.link && safeUrl(event.link) !== "#") {
+    const link = document.createElement("a");
+    link.href = safeUrl(event.link);
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "開啟相關連結 ↗";
+    content.append(link);
+  }
+
+  const actions = $("#event-detail-actions");
+  actions.replaceChildren();
+  const ics = document.createElement("button");
+  ics.type = "button";
+  ics.className = "button button-secondary";
+  ics.textContent = "加入個人行事曆 (.ics)";
+  ics.addEventListener("click", () => downloadEventsICS([event], `${event.title}.ics`));
+  actions.append(ics);
+  if (isAdmin()) {
+    const copy = document.createElement("button");
+    copy.type = "button"; copy.className = "button button-secondary"; copy.textContent = "複製";
+    copy.addEventListener("click", () => { closeDialog($("#event-detail-dialog")); openEventEditor(event, true); });
+    const edit = document.createElement("button");
+    edit.type = "button"; edit.className = "button button-secondary"; edit.textContent = "編輯";
+    edit.addEventListener("click", () => { closeDialog($("#event-detail-dialog")); openEventEditor(event); });
+    const remove = document.createElement("button");
+    remove.type = "button"; remove.className = "button button-danger"; remove.textContent = "刪除";
+    remove.addEventListener("click", async () => {
+      closeDialog($("#event-detail-dialog"));
+      await removeDoc("events", event.id, "行事曆活動");
+    });
+    actions.append(copy, edit, remove);
+  }
+  openDialog("event-detail-dialog");
+}
+
+function syncEventFormFields() {
+  const allDay = $("#event-all-day").checked;
+  $("#event-start-time").disabled = allDay;
+  $("#event-end-time").disabled = allDay;
+  $("#event-time-fields").classList.toggle("disabled-fields", allDay);
+  const repeats = $("#event-repeat").value !== "none";
+  $("#event-repeat-until").disabled = !repeats;
+  $("#event-repeat-until").required = repeats;
+  $("#event-end-date").min = $("#event-start-date").value;
+  $("#event-repeat-until").min = $("#event-start-date").value;
+}
+
+function openEventEditor(event = null, copy = false) {
+  if (!isAdmin()) return;
+  $("#event-form").reset();
+  const today = todayKey();
+  $("#event-id").value = event && !copy ? event.id : "";
+  $("#event-dialog-title").textContent = event ? (copy ? "複製行事曆活動" : "修改行事曆活動") : "新增行事曆活動";
+  $("#event-title-input").value = event ? `${event.title}${copy ? "（複製）" : ""}` : "";
+  $("#event-category").value = event?.category || "class";
+  $("#event-start-date").value = event?.startDate || today;
+  $("#event-end-date").value = event?.endDate || event?.startDate || today;
+  $("#event-all-day").checked = event?.allDay !== false;
+  $("#event-start-time").value = event?.startTime || "";
+  $("#event-end-time").value = event?.endTime || "";
+  $("#event-description").value = event?.description || "";
+  $("#event-link").value = event?.link || "";
+  $("#event-important").checked = Boolean(event?.important);
+  $("#event-repeat").value = event?.repeat || "none";
+  $("#event-repeat-until").value = event?.repeatUntil || "";
+  syncEventFormFields();
+  openDialog("event-dialog");
 }
 
 function renderTags() {
@@ -1031,6 +1522,11 @@ function subscribeData() {
     renderTemplates();
   }, error => showToast(`常用範本載入失敗：${error.message}`, true));
 
+  onSnapshot(query(collection(db, "events"), orderBy("startDate")), snapshot => {
+    state.events = snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
+    renderEvents();
+  }, error => showToast(`班級行事曆載入失敗：${error.message}`, true));
+
   onSnapshot(doc(db, "settings", "main"), snapshot => {
     if (snapshot.exists()) state.settings = { ...state.settings, ...snapshot.data() };
     renderHeader();
@@ -1087,6 +1583,10 @@ document.querySelectorAll("[data-open]").forEach(button => button.addEventListen
     openTimetableEditor();
     return;
   }
+  if (id === "event-dialog") {
+    openEventEditor();
+    return;
+  }
   openDialog(id);
 }));
 
@@ -1128,6 +1628,28 @@ function entryFormData() {
     publishStart,
     publishEnd,
     updatedAt: serverTimestamp()
+  };
+}
+
+function eventFormData() {
+  const startDate = $("#event-start-date").value;
+  const endDate = $("#event-end-date").value;
+  const allDay = $("#event-all-day").checked;
+  const repeat = $("#event-repeat").value;
+  const repeatUntil = repeat === "none" ? "" : $("#event-repeat-until").value;
+  const startTime = allDay ? "" : $("#event-start-time").value;
+  const endTime = allDay ? "" : $("#event-end-time").value;
+  const linkValue = $("#event-link").value.trim();
+  if (endDate < startDate) return showToast("活動結束日期不能早於開始日期", true), null;
+  if (!allDay && (!startTime || !endTime)) return showToast("非全天活動必須填寫開始與結束時間", true), null;
+  if (!allDay && startDate === endDate && endTime <= startTime) return showToast("結束時間必須晚於開始時間", true), null;
+  if (repeat !== "none" && (!repeatUntil || repeatUntil < startDate)) return showToast("重複截止日期不能早於開始日期", true), null;
+  if (linkValue && safeUrl(linkValue) === "#") return showToast("請輸入有效的 http 或 https 網址", true), null;
+  return {
+    title: $("#event-title-input").value.trim(), category: $("#event-category").value,
+    startDate, endDate, allDay, startTime, endTime,
+    description: $("#event-description").value.trim(), link: linkValue ? safeUrl(linkValue) : "",
+    important: $("#event-important").checked, repeat, repeatUntil, updatedAt: serverTimestamp()
   };
 }
 
@@ -1215,15 +1737,91 @@ $("#template-form").addEventListener("submit", async event => {
 
 $("#template-cancel-edit").addEventListener("click", resetTemplateForm);
 
-document.querySelectorAll("[data-page]").forEach(button => button.addEventListener("click", () => {
-  const page = button.dataset.page;
-  document.querySelectorAll("[data-page]").forEach(item => item.classList.toggle("active", item === button));
+$("#event-all-day").addEventListener("change", syncEventFormFields);
+$("#event-repeat").addEventListener("change", syncEventFormFields);
+$("#event-start-date").addEventListener("change", () => {
+  if (!$("#event-end-date").value || $("#event-end-date").value < $("#event-start-date").value) $("#event-end-date").value = $("#event-start-date").value;
+  syncEventFormFields();
+});
+$("#event-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!isAdmin()) return;
+  const id = $("#event-id").value;
+  const data = eventFormData();
+  if (!data) return;
+  try {
+    if (id) await updateDoc(doc(db, "events", id), data);
+    else await addDoc(collection(db, "events"), { ...data, createdAt: serverTimestamp() });
+    closeDialog($("#event-dialog"));
+    state.eventsCalendarDate = dateFromKey(data.startDate);
+    showToast(id ? "行事曆活動已更新" : "行事曆活動已新增");
+  } catch (error) { showToast(`活動儲存失敗：${error.message}`, true); }
+});
+
+$("#add-event-page").addEventListener("click", () => openEventEditor());
+$("#events-prev-month").addEventListener("click", () => {
+  state.eventsCalendarDate = new Date(state.eventsCalendarDate.getFullYear(), state.eventsCalendarDate.getMonth() - 1, 1, 12);
+  renderEvents();
+});
+$("#events-next-month").addEventListener("click", () => {
+  state.eventsCalendarDate = new Date(state.eventsCalendarDate.getFullYear(), state.eventsCalendarDate.getMonth() + 1, 1, 12);
+  renderEvents();
+});
+$("#events-today").addEventListener("click", () => { state.eventsCalendarDate = dateFromKey(todayKey()); renderEvents(); });
+document.querySelectorAll("[data-events-view]").forEach(button => button.addEventListener("click", () => {
+  state.eventsView = button.dataset.eventsView;
+  renderEvents();
+}));
+$("#export-events-ics").addEventListener("click", () => downloadEventsICS());
+$("#export-events-csv").addEventListener("click", exportEventsCSV);
+$("#import-events-csv").addEventListener("change", async event => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try { await importEventsCSV(await file.text()); }
+  catch (error) { showToast(`行事曆 CSV 匯入失敗：${error.message}`, true); }
+  event.target.value = "";
+});
+
+function switchPage(page) {
+  document.querySelectorAll("[data-page]").forEach(item => item.classList.toggle("active", item.dataset.page === page));
   $("#contact-page").classList.toggle("hidden", page !== "contact");
   $("#timetable-page").classList.toggle("hidden", page !== "timetable");
+  $("#events-page").classList.toggle("hidden", page !== "events");
   if (page === "timetable") renderTimetable();
-}));
+  if (page === "events") renderEvents();
+}
+
+function showContactBookDate(key) {
+  state.selectedDate = key;
+  state.calendarDate = dateFromKey(key);
+  renderEntries();
+  renderCalendar();
+  switchPage("contact");
+  $("#entries-title").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+document.querySelectorAll("[data-page]").forEach(button => button.addEventListener("click", () => switchPage(button.dataset.page)));
 
 $("#public-edit-timetable").addEventListener("click", openTimetableEditor);
+
+document.querySelectorAll("[data-density]").forEach(button => button.addEventListener("click", () => {
+  timetableView.density = button.dataset.density;
+  applyTimetableViewSettings();
+  saveTimetableView();
+}));
+$("#timetable-zoom-out").addEventListener("click", () => setTimetableZoom(timetableView.zoom - 5));
+$("#timetable-zoom-in").addEventListener("click", () => setTimetableZoom(timetableView.zoom + 5));
+$("#timetable-fit").addEventListener("click", fitTimetableWidth);
+$("#timetable-reset-view").addEventListener("click", () => {
+  Object.assign(timetableView, TIMETABLE_VIEW_DEFAULTS);
+  applyTimetableViewSettings();
+  saveTimetableView();
+  $("#timetable-container").scrollLeft = 0;
+  showToast("功課表顯示已還原");
+});
+$("#timetable-fullscreen").addEventListener("click", toggleTimetableFullscreen);
+document.addEventListener("fullscreenchange", updateFullscreenButton);
+document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
 
 $("#timetable-day-count").addEventListener("change", event => {
   const timetable = collectTimetableEditor();
@@ -1340,15 +1938,17 @@ document.querySelectorAll("[data-entry-filter]").forEach(button => button.addEve
 onAuthStateChanged(auth, user => {
   state.user = user;
   if (!isAdmin()) state.entryFilter = "all";
-  renderHeader(); renderEntries(); renderResources(); renderAnnouncements(); renderTimetable(); subscribeDrafts();
+  renderHeader(); renderEntries(); renderResources(); renderAnnouncements(); renderTimetable(); renderEvents(); subscribeDrafts();
 });
 
 renderHeader();
 renderCalendar();
 renderTimetable();
+renderEvents();
 subscribeData();
 setInterval(() => {
   renderEntries();
   renderCalendar();
   renderAnnouncements();
+  renderEventAlerts();
 }, 60000);
