@@ -116,6 +116,17 @@ const timetableView = (() => {
   } catch { return { ...TIMETABLE_VIEW_DEFAULTS }; }
 })();
 
+const EVENTS_VIEW_DEFAULTS = { monthZoom: 85, listZoom: 100 };
+const eventsViewSettings = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem("eventsViewSettings") || "{}");
+    return {
+      monthZoom: Math.min(120, Math.max(50, Number(saved.monthZoom) || EVENTS_VIEW_DEFAULTS.monthZoom)),
+      listZoom: Math.min(120, Math.max(50, Number(saved.listZoom) || EVENTS_VIEW_DEFAULTS.listZoom))
+    };
+  } catch { return { ...EVENTS_VIEW_DEFAULTS }; }
+})();
+
 let unsubscribeDrafts = null;
 
 const $ = (selector) => document.querySelector(selector);
@@ -346,6 +357,75 @@ async function toggleTimetableFullscreen() {
     }
   }
   updateFullscreenButton();
+}
+
+function activeEventsZoomKey() {
+  return state.eventsView === "list" ? "listZoom" : "monthZoom";
+}
+
+function saveEventsViewSettings() {
+  try { localStorage.setItem("eventsViewSettings", JSON.stringify(eventsViewSettings)); } catch { /* 瀏覽器拒絕儲存時仍可使用 */ }
+}
+
+function applyEventsViewSettings() {
+  const shell = $("#events-shell");
+  if (!shell) return;
+  const zoom = eventsViewSettings[activeEventsZoomKey()];
+  shell.style.setProperty("--events-zoom", String(zoom / 100));
+  $("#events-zoom-label").textContent = state.eventsView === "list" ? "列表縮放" : "月曆縮放";
+  $("#events-zoom-value").textContent = `${Math.round(zoom)}%`;
+  $("#events-zoom-out").disabled = zoom <= 50;
+  $("#events-zoom-in").disabled = zoom >= 120;
+}
+
+function setEventsZoom(value, persist = true) {
+  const key = activeEventsZoomKey();
+  eventsViewSettings[key] = Math.min(120, Math.max(50, Math.round(Number(value) / 5) * 5));
+  applyEventsViewSettings();
+  if (persist) saveEventsViewSettings();
+}
+
+function fitEventsWidth() {
+  const viewport = state.eventsView === "list" ? $("#events-list-view") : $("#events-calendar-view");
+  const content = state.eventsView === "list" ? viewport : $("#events-calendar-grid");
+  if (!viewport || !content) return;
+  $("#events-shell").style.setProperty("--events-zoom", "1");
+  void content.offsetWidth;
+  const available = Math.max(1, viewport.clientWidth - 8);
+  const naturalWidth = Math.max(1, content.scrollWidth);
+  setEventsZoom(Math.floor((available / naturalWidth) * 100 / 5) * 5);
+  viewport.scrollLeft = 0;
+}
+
+function eventsIsFullscreen() {
+  const shell = $("#events-shell");
+  return document.fullscreenElement === shell || document.webkitFullscreenElement === shell || shell.classList.contains("pseudo-fullscreen");
+}
+
+function updateEventsFullscreenButton() {
+  $("#events-fullscreen").textContent = eventsIsFullscreen() ? "離開全螢幕" : "全螢幕";
+}
+
+async function toggleEventsFullscreen() {
+  const shell = $("#events-shell");
+  if (eventsIsFullscreen()) {
+    if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+    else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
+    else {
+      shell.classList.remove("pseudo-fullscreen");
+      document.body.classList.remove("no-scroll");
+    }
+  } else {
+    try {
+      if (shell.requestFullscreen) await shell.requestFullscreen();
+      else if (shell.webkitRequestFullscreen) shell.webkitRequestFullscreen();
+      else throw new Error("fullscreen unsupported");
+    } catch {
+      shell.classList.add("pseudo-fullscreen");
+      document.body.classList.add("no-scroll");
+    }
+  }
+  updateEventsFullscreenButton();
 }
 
 function cloneTimetable(source = state.timetable) {
@@ -1172,6 +1252,7 @@ function renderEvents() {
   renderEventAlerts();
   renderEventsCalendar();
   renderEventsList();
+  applyEventsViewSettings();
 }
 
 function repeatLabel(event) {
@@ -1773,6 +1854,19 @@ document.querySelectorAll("[data-events-view]").forEach(button => button.addEven
   renderEvents();
 }));
 $("#export-events-ics").addEventListener("click", () => downloadEventsICS());
+$("#events-zoom-out").addEventListener("click", () => setEventsZoom(eventsViewSettings[activeEventsZoomKey()] - 5));
+$("#events-zoom-in").addEventListener("click", () => setEventsZoom(eventsViewSettings[activeEventsZoomKey()] + 5));
+$("#events-fit").addEventListener("click", fitEventsWidth);
+$("#events-reset-zoom").addEventListener("click", () => {
+  const key = activeEventsZoomKey();
+  eventsViewSettings[key] = EVENTS_VIEW_DEFAULTS[key];
+  applyEventsViewSettings();
+  saveEventsViewSettings();
+  const viewport = state.eventsView === "list" ? $("#events-list-view") : $("#events-calendar-view");
+  if (viewport) viewport.scrollLeft = 0;
+  showToast(`${state.eventsView === "list" ? "列表" : "月曆"}縮放已還原`);
+});
+$("#events-fullscreen").addEventListener("click", toggleEventsFullscreen);
 $("#export-events-csv").addEventListener("click", exportEventsCSV);
 $("#import-events-csv").addEventListener("change", async event => {
   const file = event.target.files?.[0];
@@ -1820,8 +1914,8 @@ $("#timetable-reset-view").addEventListener("click", () => {
   showToast("功課表顯示已還原");
 });
 $("#timetable-fullscreen").addEventListener("click", toggleTimetableFullscreen);
-document.addEventListener("fullscreenchange", updateFullscreenButton);
-document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
+document.addEventListener("fullscreenchange", () => { updateFullscreenButton(); updateEventsFullscreenButton(); });
+document.addEventListener("webkitfullscreenchange", () => { updateFullscreenButton(); updateEventsFullscreenButton(); });
 
 $("#timetable-day-count").addEventListener("change", event => {
   const timetable = collectTimetableEditor();

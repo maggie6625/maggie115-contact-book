@@ -238,10 +238,18 @@ body.no-scroll { overflow: hidden; }
 .events-month-nav > button:not(.icon-button), .events-view-switch button { border: 1px solid #b9c8bf; border-radius: 9px; padding: 7px 11px; color: #405048; background: #fff; font-weight: 900; }
 .events-view-switch button.active { color: #fff; border-color: var(--board); background: var(--board); }
 .events-toolbar { margin-bottom: 14px; padding: 12px; border-radius: 12px; background: #f1f5f1; }
+.events-view-controls { position: relative; z-index: 3; display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; width: fit-content; max-width: 100%; margin: 0 auto 14px; padding: 8px 10px; border: 1px solid #c9d5ce; border-radius: 12px; color: #42534a; background: #ffffffed; box-shadow: 0 4px 14px #263a3012; font-size: 13px; font-weight: 900; }
+.events-view-controls button { min-height: 34px; padding: 6px 10px; border: 1px solid #b9c8bf; border-radius: 9px; color: #405048; background: #fff; font-size: 13px; font-weight: 900; }
+.events-view-controls button:hover { color: #fff; border-color: var(--board); background: var(--board); }
+.events-view-controls button:disabled { cursor: not-allowed; opacity: .45; }
+.events-zoom-controls { display: flex; align-items: center; gap: 5px; }
+.events-zoom-controls button { min-width: 35px; padding-inline: 7px; font-size: 18px; line-height: 1; }
+.events-zoom-controls output { min-width: 48px; color: var(--board); text-align: center; font-weight: 950; }
 .event-alerts { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 9px; margin-bottom: 16px; }
 .event-alert-card { --event-color: #64748b; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; min-height: 58px; padding: 10px 13px; border: 1px solid color-mix(in srgb, var(--event-color) 45%, white); border-left: 6px solid var(--event-color); border-radius: 11px; color: #27322d; background: #fff; text-align: left; }
 .event-alert-card strong { color: var(--event-color); white-space: nowrap; }
 #events-calendar-view { overflow-x: auto; padding-bottom: 5px; }
+#events-calendar-view .events-weekdays, #events-calendar-view .events-calendar-grid, #events-list-view { zoom: var(--events-zoom, .85); }
 .events-weekdays, .events-calendar-grid { min-width: 760px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .events-weekdays { color: #735842; text-align: center; font-size: 13px; font-weight: 950; }
 .events-weekdays span { padding: 8px; }
@@ -282,6 +290,10 @@ body.no-scroll { overflow: hidden; }
 .category-item { --event-color: #3d9560; }
 .category-other { --event-color: #64748b; }
 
+#events-shell:fullscreen, #events-shell:-webkit-full-screen, #events-shell.pseudo-fullscreen { width: 100vw; height: 100vh; max-width: none; overflow: auto; border-radius: 0; background: #fffdf8; }
+#events-shell.pseudo-fullscreen { position: fixed; z-index: 100; inset: 0; }
+#events-shell:fullscreen .events-view-controls, #events-shell:-webkit-full-screen .events-view-controls, #events-shell.pseudo-fullscreen .events-view-controls { position: sticky; top: 8px; }
+
 @media (max-width: 820px) {
   .site-header { align-items: flex-start; }
   .content-grid { grid-template-columns: 1fr; }
@@ -316,6 +328,7 @@ body.no-scroll { overflow: hidden; }
   .events-month-nav h3 { min-width: 0; flex: 1; }
   .events-view-switch { width: 100%; }
   .events-view-switch button { flex: 1; }
+  .events-view-controls { width: 100%; }
   .event-date-grid { grid-template-columns: 1fr; }
   .event-list-card { grid-template-columns: 58px 1fr; }
   .event-list-date { padding: 8px; }

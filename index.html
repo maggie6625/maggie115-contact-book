@@ -134,7 +134,7 @@
     </section>
 
     <section id="events-page" class="page-view hidden" aria-labelledby="events-title">
-      <div class="panel events-panel">
+      <div id="events-shell" class="panel events-panel">
         <div class="events-heading">
           <div>
             <p class="section-kicker">CLASS CALENDAR</p>
@@ -159,6 +159,18 @@
             <button type="button" data-events-view="month" class="active">月曆</button>
             <button type="button" data-events-view="list">列表</button>
           </div>
+        </div>
+
+        <div class="events-view-controls" aria-label="行事曆顯示設定">
+          <span id="events-zoom-label">月曆縮放</span>
+          <div class="events-zoom-controls" role="group" aria-labelledby="events-zoom-label">
+            <button id="events-zoom-out" type="button" aria-label="縮小行事曆">－</button>
+            <output id="events-zoom-value" aria-live="polite">85%</output>
+            <button id="events-zoom-in" type="button" aria-label="放大行事曆">＋</button>
+          </div>
+          <button id="events-fit" type="button">符合寬度</button>
+          <button id="events-reset-zoom" type="button">還原</button>
+          <button id="events-fullscreen" type="button">全螢幕</button>
         </div>
 
         <div id="events-calendar-view">
