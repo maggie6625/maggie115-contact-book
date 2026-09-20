@@ -116,7 +116,7 @@ const timetableView = (() => {
   } catch { return { ...TIMETABLE_VIEW_DEFAULTS }; }
 })();
 
-const EVENTS_VIEW_DEFAULTS = { monthZoom: 85, listZoom: 100 };
+const EVENTS_VIEW_DEFAULTS = { monthZoom: 90, listZoom: 90 };
 const eventsViewSettings = (() => {
   try {
     const saved = JSON.parse(localStorage.getItem("eventsViewSettings") || "{}");

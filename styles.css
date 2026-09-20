@@ -229,7 +229,7 @@ body.no-scroll { overflow: hidden; }
 .file-button input { position: absolute; width: 1px !important; height: 1px; opacity: 0; pointer-events: none; }
 
 /* 班級行事曆 */
-.events-panel { padding: clamp(18px, 3vw, 30px); }
+.events-panel { --tt-main: #6f927c; --tt-deep: #355846; padding: clamp(18px, 3vw, 30px); }
 .events-heading, .events-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
 .events-heading { margin-bottom: 18px; }
 .events-heading h2 { margin: 0; color: var(--board); }
@@ -238,13 +238,7 @@ body.no-scroll { overflow: hidden; }
 .events-month-nav > button:not(.icon-button), .events-view-switch button { border: 1px solid #b9c8bf; border-radius: 9px; padding: 7px 11px; color: #405048; background: #fff; font-weight: 900; }
 .events-view-switch button.active { color: #fff; border-color: var(--board); background: var(--board); }
 .events-toolbar { margin-bottom: 14px; padding: 12px; border-radius: 12px; background: #f1f5f1; }
-.events-view-controls { position: relative; z-index: 3; display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; width: fit-content; max-width: 100%; margin: 0 auto 14px; padding: 8px 10px; border: 1px solid #c9d5ce; border-radius: 12px; color: #42534a; background: #ffffffed; box-shadow: 0 4px 14px #263a3012; font-size: 13px; font-weight: 900; }
-.events-view-controls button { min-height: 34px; padding: 6px 10px; border: 1px solid #b9c8bf; border-radius: 9px; color: #405048; background: #fff; font-size: 13px; font-weight: 900; }
-.events-view-controls button:hover { color: #fff; border-color: var(--board); background: var(--board); }
-.events-view-controls button:disabled { cursor: not-allowed; opacity: .45; }
-.events-zoom-controls { display: flex; align-items: center; gap: 5px; }
-.events-zoom-controls button { min-width: 35px; padding-inline: 7px; font-size: 18px; line-height: 1; }
-.events-zoom-controls output { min-width: 48px; color: var(--board); text-align: center; font-weight: 950; }
+.events-view-controls { margin-bottom: 14px; }
 .event-alerts { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 9px; margin-bottom: 16px; }
 .event-alert-card { --event-color: #64748b; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; min-height: 58px; padding: 10px 13px; border: 1px solid color-mix(in srgb, var(--event-color) 45%, white); border-left: 6px solid var(--event-color); border-radius: 11px; color: #27322d; background: #fff; text-align: left; }
 .event-alert-card strong { color: var(--event-color); white-space: nowrap; }
