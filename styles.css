@@ -254,7 +254,7 @@ body.no-scroll { overflow: hidden; }
 .events-day-number { width: 30px; height: 30px; border: 0; border-radius: 50%; color: #33423b; background: transparent; font-weight: 950; }
 .events-day-number:hover { color: #fff; background: var(--board); }
 .events-day-items { display: grid; gap: 4px; margin-top: 3px; }
-.event-chip { --event-color: #64748b; min-width: 0; width: 100%; overflow: hidden; padding: 5px 6px; border: 0; border-left: 4px solid var(--event-color); border-radius: 6px; color: #26312d; background: color-mix(in srgb, var(--event-color) 14%, white); text-align: left; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 850; }
+.event-chip { --event-color: #64748b; display: -webkit-box; min-width: 0; width: 100%; overflow: hidden; padding: 5px 6px; border: 0; border-left: 4px solid var(--event-color); border-radius: 6px; color: #26312d; background: color-mix(in srgb, var(--event-color) 14%, white); text-align: left; white-space: normal; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; line-height: 1.3; font-size: 11px; font-weight: 850; }
 .event-chip.important { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--event-color) 50%, white); }
 .event-more { color: #69766f; text-align: center; font-size: 11px; }
 .event-list { display: grid; gap: 10px; }
@@ -265,6 +265,25 @@ body.no-scroll { overflow: hidden; }
 .event-list-body { display: grid; gap: 5px; padding: 15px; border: 0; color: #29352f; background: #fff; text-align: left; }
 .event-list-body strong { font-size: 16px; }
 .event-list-body span { color: #69766f; font-size: 13px; }
+.events-density-compact .events-day { min-height: 108px; padding: 5px; }
+.events-density-compact .events-day-number { width: 27px; height: 27px; }
+.events-density-compact .events-day-items { gap: 3px; margin-top: 2px; }
+.events-density-compact .event-chip { padding: 4px 5px; -webkit-line-clamp: 2; line-clamp: 2; font-size: 10px; }
+.events-density-compact .event-list { gap: 7px; }
+.events-density-compact .event-list-card { grid-template-columns: 60px 1fr; }
+.events-density-compact .event-list-date, .events-density-compact .event-list-body { padding: 10px; }
+.events-density-compact .event-list-date strong { font-size: 22px; }
+.events-density-compact .event-list-body strong { font-size: 14px; }
+.events-density-ultra .events-day { min-height: 92px; padding: 4px; }
+.events-density-ultra .events-day-number { width: 24px; height: 24px; font-size: 12px; }
+.events-density-ultra .events-day-items { gap: 2px; margin-top: 1px; }
+.events-density-ultra .event-chip { padding: 3px 4px; border-left-width: 3px; -webkit-line-clamp: 2; line-clamp: 2; font-size: 9px; line-height: 1.2; }
+.events-density-ultra .event-list { gap: 5px; }
+.events-density-ultra .event-list-card { grid-template-columns: 52px 1fr; border-left-width: 4px; }
+.events-density-ultra .event-list-date, .events-density-ultra .event-list-body { padding: 8px; }
+.events-density-ultra .event-list-date strong { font-size: 19px; }
+.events-density-ultra .event-list-date span, .events-density-ultra .event-list-body span { font-size: 11px; }
+.events-density-ultra .event-list-body strong { font-size: 13px; }
 .event-legend { display: flex; gap: 8px 15px; flex-wrap: wrap; margin-top: 16px; color: #5d6a64; font-size: 12px; }
 .event-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .event-dot { --event-color: #64748b; width: 9px; height: 9px; border-radius: 50%; background: var(--event-color); }

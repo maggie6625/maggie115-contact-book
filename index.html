@@ -162,10 +162,15 @@
         </div>
 
         <div class="timetable-view-controls events-view-controls" aria-label="行事曆顯示設定">
+          <div class="density-controls" role="group" aria-label="行事曆排版密度">
+            <button type="button" data-events-density="comfortable">舒適</button>
+            <button type="button" data-events-density="compact">緊湊</button>
+            <button type="button" data-events-density="ultra">超緊湊</button>
+          </div>
           <span id="events-zoom-label">月曆縮放</span>
           <div class="zoom-controls events-zoom-controls" role="group" aria-labelledby="events-zoom-label">
             <button id="events-zoom-out" type="button" aria-label="縮小行事曆">－</button>
-            <output id="events-zoom-value" aria-live="polite">85%</output>
+            <output id="events-zoom-value" aria-live="polite">90%</output>
             <button id="events-zoom-in" type="button" aria-label="放大行事曆">＋</button>
           </div>
           <button id="events-fit" type="button">符合寬度</button>

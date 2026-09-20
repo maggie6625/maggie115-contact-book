@@ -116,13 +116,22 @@ const timetableView = (() => {
   } catch { return { ...TIMETABLE_VIEW_DEFAULTS }; }
 })();
 
-const EVENTS_VIEW_DEFAULTS = { monthZoom: 90, listZoom: 90 };
+const EVENTS_DENSITIES = ["comfortable", "compact", "ultra"];
+const DEFAULT_EVENTS_DENSITY = window.matchMedia?.("(max-width: 560px)").matches ? "compact" : "comfortable";
+const EVENTS_VIEW_DEFAULTS = {
+  monthZoom: 90,
+  listZoom: 90,
+  monthDensity: DEFAULT_EVENTS_DENSITY,
+  listDensity: DEFAULT_EVENTS_DENSITY
+};
 const eventsViewSettings = (() => {
   try {
     const saved = JSON.parse(localStorage.getItem("eventsViewSettings") || "{}");
     return {
       monthZoom: Math.min(120, Math.max(50, Number(saved.monthZoom) || EVENTS_VIEW_DEFAULTS.monthZoom)),
-      listZoom: Math.min(120, Math.max(50, Number(saved.listZoom) || EVENTS_VIEW_DEFAULTS.listZoom))
+      listZoom: Math.min(120, Math.max(50, Number(saved.listZoom) || EVENTS_VIEW_DEFAULTS.listZoom)),
+      monthDensity: EVENTS_DENSITIES.includes(saved.monthDensity) ? saved.monthDensity : EVENTS_VIEW_DEFAULTS.monthDensity,
+      listDensity: EVENTS_DENSITIES.includes(saved.listDensity) ? saved.listDensity : EVENTS_VIEW_DEFAULTS.listDensity
     };
   } catch { return { ...EVENTS_VIEW_DEFAULTS }; }
 })();
@@ -363,6 +372,10 @@ function activeEventsZoomKey() {
   return state.eventsView === "list" ? "listZoom" : "monthZoom";
 }
 
+function activeEventsDensityKey() {
+  return state.eventsView === "list" ? "listDensity" : "monthDensity";
+}
+
 function saveEventsViewSettings() {
   try { localStorage.setItem("eventsViewSettings", JSON.stringify(eventsViewSettings)); } catch { /* 瀏覽器拒絕儲存時仍可使用 */ }
 }
@@ -371,11 +384,19 @@ function applyEventsViewSettings() {
   const shell = $("#events-shell");
   if (!shell) return;
   const zoom = eventsViewSettings[activeEventsZoomKey()];
+  const density = eventsViewSettings[activeEventsDensityKey()];
+  shell.classList.remove("events-density-comfortable", "events-density-compact", "events-density-ultra");
+  shell.classList.add(`events-density-${density}`);
   shell.style.setProperty("--events-zoom", String(zoom / 100));
   $("#events-zoom-label").textContent = state.eventsView === "list" ? "列表縮放" : "月曆縮放";
   $("#events-zoom-value").textContent = `${Math.round(zoom)}%`;
   $("#events-zoom-out").disabled = zoom <= 50;
   $("#events-zoom-in").disabled = zoom >= 120;
+  document.querySelectorAll("[data-events-density]").forEach(button => {
+    const active = button.dataset.eventsDensity === density;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
 }
 
 function setEventsZoom(value, persist = true) {
@@ -1122,7 +1143,7 @@ function makeEventChip(occurrence, compact = false) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = `event-chip category-${occurrence.event.category || "other"}${occurrence.event.important ? " important" : ""}`;
-  button.title = eventDateLabel(occurrence);
+  button.title = `${occurrence.event.title}｜${eventDateLabel(occurrence)}`;
   const prefix = occurrence.event.important ? "★ " : (occurrence.event.repeat && occurrence.event.repeat !== "none" ? "↻ " : "");
   const time = !compact && occurrence.event.allDay === false && occurrence.event.startTime ? `${occurrence.event.startTime} ` : "";
   button.textContent = `${prefix}${time}${occurrence.event.title}`;
@@ -1169,6 +1190,7 @@ function renderEventsCalendar() {
   const rangeStart = dateKeyFromDate(calendarStart);
   const rangeEnd = dateKeyFromDate(calendarEnd);
   const occurrences = occurrencesInRange(rangeStart, rangeEnd);
+  const visibleLimit = { comfortable: 4, compact: 5, ultra: 6 }[eventsViewSettings.monthDensity] || 4;
   const grid = $("#events-calendar-grid");
   grid.replaceChildren();
 
@@ -1190,12 +1212,12 @@ function renderEventsCalendar() {
     const list = document.createElement("div");
     list.className = "events-day-items";
     occurrences.filter(item => key >= item.occurrenceStart && key <= item.occurrenceEnd)
-      .slice(0, 4).forEach(item => list.append(makeEventChip(item, true)));
+      .slice(0, visibleLimit).forEach(item => list.append(makeEventChip(item, true)));
     const count = occurrences.filter(item => key >= item.occurrenceStart && key <= item.occurrenceEnd).length;
-    if (count > 4) {
+    if (count > visibleLimit) {
       const more = document.createElement("span");
       more.className = "event-more";
-      more.textContent = `還有 ${count - 4} 項`;
+      more.textContent = `還有 ${count - visibleLimit} 項`;
       list.append(more);
     }
     day.append(list);
@@ -1856,15 +1878,24 @@ document.querySelectorAll("[data-events-view]").forEach(button => button.addEven
 $("#export-events-ics").addEventListener("click", () => downloadEventsICS());
 $("#events-zoom-out").addEventListener("click", () => setEventsZoom(eventsViewSettings[activeEventsZoomKey()] - 5));
 $("#events-zoom-in").addEventListener("click", () => setEventsZoom(eventsViewSettings[activeEventsZoomKey()] + 5));
+document.querySelectorAll("[data-events-density]").forEach(button => button.addEventListener("click", () => {
+  eventsViewSettings[activeEventsDensityKey()] = button.dataset.eventsDensity;
+  applyEventsViewSettings();
+  saveEventsViewSettings();
+  renderEvents();
+}));
 $("#events-fit").addEventListener("click", fitEventsWidth);
 $("#events-reset-zoom").addEventListener("click", () => {
-  const key = activeEventsZoomKey();
-  eventsViewSettings[key] = EVENTS_VIEW_DEFAULTS[key];
+  const zoomKey = activeEventsZoomKey();
+  const densityKey = activeEventsDensityKey();
+  eventsViewSettings[zoomKey] = EVENTS_VIEW_DEFAULTS[zoomKey];
+  eventsViewSettings[densityKey] = EVENTS_VIEW_DEFAULTS[densityKey];
   applyEventsViewSettings();
   saveEventsViewSettings();
   const viewport = state.eventsView === "list" ? $("#events-list-view") : $("#events-calendar-view");
   if (viewport) viewport.scrollLeft = 0;
-  showToast(`${state.eventsView === "list" ? "列表" : "月曆"}縮放已還原`);
+  renderEvents();
+  showToast(`${state.eventsView === "list" ? "列表" : "月曆"}顯示已還原`);
 });
 $("#events-fullscreen").addEventListener("click", toggleEventsFullscreen);
 $("#export-events-csv").addEventListener("click", exportEventsCSV);
