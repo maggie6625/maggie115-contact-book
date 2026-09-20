@@ -43,6 +43,9 @@ button { cursor: pointer; }
 .admin-bar button { border: 1px solid #ffffff55; border-radius: 8px; padding: 7px 11px; color: #fff; background: #ffffff12; }
 
 .page-shell { width: min(1180px, calc(100% - 32px)); margin: 28px auto 50px; }
+.page-tabs { display: flex; gap: 10px; margin-bottom: 22px; padding: 7px; width: fit-content; max-width: 100%; border: 1px solid #d4ddd7; border-radius: 14px; background: #fff; box-shadow: 0 5px 18px #173c2c12; }
+.page-tab { border: 0; border-radius: 10px; padding: 11px 18px; color: #52615a; background: transparent; font-weight: 900; }
+.page-tab.active { color: #fff; background: var(--board); }
 .panel { background: var(--paper); border: 1px solid #d9ddd7; border-radius: 18px; box-shadow: 0 8px 24px #1a2a2212; }
 .resources-panel, .entries-panel, .calendar-panel, .announcement-panel { padding: clamp(18px, 3vw, 28px); }
 .resources-panel { margin-bottom: 22px; }
@@ -138,10 +141,67 @@ footer { padding: 22px; color: #d9e2dc; background: var(--board-dark); text-alig
 .toast.show { translate: -50% 0; opacity: 1; }
 .toast.error { background: #8f1d16; }
 
+/* 功課表 */
+.timetable-shell {
+  --tt-main: #ef7d61; --tt-deep: #9f4c3a; --tt-soft: #fff1e9; --tt-alt: #fff9f4; --tt-lunch: #ffe3a3;
+  position: relative; overflow: hidden; padding: clamp(18px, 3.5vw, 38px); border: 3px solid var(--tt-main);
+  border-radius: 26px; color: #352e2b; background: radial-gradient(circle at top left, #fff 0 16%, transparent 17%), var(--tt-soft);
+  box-shadow: 0 14px 34px #4e38251e;
+}
+.timetable-shell::before { content: ""; position: absolute; inset: 13px; pointer-events: none; border: 2px dashed color-mix(in srgb, var(--tt-main) 75%, white); border-radius: 18px; }
+.timetable-header { position: relative; z-index: 1; padding: 14px 12px 22px; text-align: center; }
+.timetable-header h2 { margin: 4px 0 8px; color: var(--tt-deep); font-size: clamp(26px, 4vw, 42px); letter-spacing: .08em; }
+.timetable-subtitle { margin: 0; font-size: clamp(14px, 2vw, 20px); font-weight: 900; }
+.timetable-decoration { position: relative; z-index: 1; color: var(--tt-main); text-align: center; font-size: 24px; letter-spacing: .35em; }
+.timetable-scroll { position: relative; z-index: 1; overflow-x: auto; padding: 4px; }
+.timetable-table { width: 100%; min-width: 820px; border-collapse: separate; border-spacing: 0; overflow: hidden; border: 2px solid var(--tt-deep); border-radius: 18px; background: #fff; }
+.timetable-table th, .timetable-table td { min-width: 115px; height: 104px; padding: 12px 10px; border-right: 1px solid color-mix(in srgb, var(--tt-main) 45%, #bbb); border-bottom: 1px solid color-mix(in srgb, var(--tt-main) 45%, #bbb); text-align: center; vertical-align: middle; }
+.timetable-table tr > :last-child { border-right: 0; }
+.timetable-table tbody tr:last-child > * { border-bottom: 0; }
+.timetable-table thead th { height: 86px; color: var(--tt-deep); background: var(--tt-soft); font-size: 18px; }
+.timetable-table thead th:nth-child(n+3):nth-child(even) { background: color-mix(in srgb, var(--tt-soft) 72%, #dff3ff); }
+.timetable-table thead th:nth-child(n+3):nth-child(odd) { background: color-mix(in srgb, var(--tt-soft) 72%, #fff1c7); }
+.timetable-table thead small, .timetable-table td small { display: block; margin-top: 6px; color: color-mix(in srgb, var(--tt-deep) 75%, #555); font-size: 13px; }
+.timetable-table tbody th { min-width: 88px; color: var(--tt-deep); background: color-mix(in srgb, var(--tt-soft) 82%, #e8f8dd); font-size: 17px; }
+.timetable-table .period-time { min-width: 112px; background: var(--tt-alt); font-weight: 800; white-space: pre-line; }
+.timetable-table td strong { display: block; white-space: pre-line; line-height: 1.45; font-size: 16px; }
+.course-icon { display: inline-block; margin-right: 6px; font-size: 19px; }
+.timetable-table .empty-course { background: #fffdfb; }
+.timetable-table .lunch-row td { height: 60px; color: var(--tt-deep); background: var(--tt-lunch); font-size: 22px; font-weight: 950; letter-spacing: .25em; }
+.timetable-updated { position: relative; z-index: 1; margin: 14px 8px 0; color: var(--tt-deep); text-align: right; font-size: 12px; }
+
+.theme-forest { --tt-main: #75a66c; --tt-deep: #315f3c; --tt-soft: #edf7e8; --tt-alt: #f8fcf4; --tt-lunch: #dcebb1; }
+.theme-ocean { --tt-main: #62aeca; --tt-deep: #26627e; --tt-soft: #e9f8fb; --tt-alt: #f4fbfd; --tt-lunch: #c7ecf2; }
+.theme-space { --tt-main: #8d7bc2; --tt-deep: #433a77; --tt-soft: #f0edff; --tt-alt: #faf8ff; --tt-lunch: #dcd1ff; }
+.theme-sunny { --tt-main: #efa83e; --tt-deep: #875210; --tt-soft: #fff7d9; --tt-alt: #fffdf3; --tt-lunch: #ffe28a; }
+
+.timetable-modal { width: min(1180px, calc(100% - 24px)); overflow: auto; }
+.timetable-modal .modal-card { min-width: 0; }
+.timetable-settings-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.timetable-settings-grid label:nth-child(-n+2) { grid-column: span 3; }
+.editor-section { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 13px; background: #fafbf9; }
+.editor-heading, .csv-section { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.editor-heading h3, .csv-section h3 { margin: 0 0 4px; color: var(--board); }
+.editor-heading p, .csv-section p { margin: 0; color: #68756f; font-size: 13px; }
+.compact-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.day-editor { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 10px; margin-top: 14px; }
+.day-editor-card { display: grid; gap: 7px; padding: 10px; border-radius: 10px; background: #eef3ed; }
+.timetable-editor-scroll { margin-top: 14px; overflow: auto; max-height: 52vh; }
+.timetable-edit-table { min-width: 940px; width: 100%; border-collapse: collapse; background: #fff; }
+.timetable-edit-table th, .timetable-edit-table td { min-width: 145px; padding: 7px; border: 1px solid #cfd8d2; vertical-align: top; }
+.timetable-edit-table th:first-child, .timetable-edit-table td:first-child { min-width: 95px; position: sticky; left: 0; z-index: 1; background: #f3f7f2; }
+.timetable-edit-table th:nth-child(2), .timetable-edit-table td:nth-child(2) { min-width: 130px; }
+.timetable-edit-table textarea { margin-bottom: 5px; min-height: 60px; resize: vertical; }
+.file-button { display: inline-flex !important; align-items: center; cursor: pointer; }
+.file-button input { position: absolute; width: 1px !important; height: 1px; opacity: 0; pointer-events: none; }
+
 @media (max-width: 820px) {
   .site-header { align-items: flex-start; }
   .content-grid { grid-template-columns: 1fr; }
   .calendar-panel { order: -1; }
+  .timetable-settings-grid { grid-template-columns: 1fr 1fr; }
+  .timetable-settings-grid label:nth-child(-n+2) { grid-column: span 2; }
+  .editor-heading, .csv-section { align-items: flex-start; flex-direction: column; }
 }
 @media (max-width: 560px) {
   .site-header { min-height: auto; padding: 18px; flex-direction: column; }
@@ -156,4 +216,11 @@ footer { padding: 22px; color: #d9e2dc; background: var(--board-dark); text-alig
   .entry-actions { position: static; margin-top: 16px; flex-wrap: wrap; }
   .admin-entry-card { padding-top: 20px; }
   .form-actions { flex-wrap: wrap; }
+  .page-tabs { width: 100%; }
+  .page-tab { flex: 1; padding: 10px 8px; }
+  .timetable-shell { padding: 16px 10px 20px; border-radius: 16px; }
+  .timetable-shell::before { inset: 6px; border-radius: 12px; }
+  .timetable-decoration { font-size: 18px; letter-spacing: .12em; }
+  .timetable-settings-grid { grid-template-columns: 1fr; }
+  .timetable-settings-grid label:nth-child(-n+2) { grid-column: auto; }
 }

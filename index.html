@@ -29,10 +29,17 @@
     <button data-open="link-dialog">＋ 新增資源</button>
     <button data-open="tag-dialog">標籤管理</button>
     <button data-open="template-dialog">常用範本</button>
+    <button data-open="timetable-dialog">功課表管理</button>
     <button data-open="settings-dialog">網站設定</button>
   </nav>
 
   <main class="page-shell">
+    <nav class="page-tabs" aria-label="主要內容">
+      <button type="button" class="page-tab active" data-page="contact">📖 電子聯絡簿</button>
+      <button type="button" class="page-tab" data-page="timetable">📚 班級功課表</button>
+    </nav>
+
+    <div id="contact-page" class="page-view">
     <section id="announcement-panel" class="panel announcement-panel hidden" aria-labelledby="announcement-title">
       <div class="section-heading">
         <div>
@@ -91,6 +98,22 @@
         </div>
       </aside>
     </div>
+    </div>
+
+    <section id="timetable-page" class="page-view hidden" aria-labelledby="timetable-title">
+      <div id="timetable-shell" class="timetable-shell theme-candy">
+        <div class="timetable-decoration" aria-hidden="true">✏️　📚　⭐　🎨</div>
+        <header class="timetable-header">
+          <p id="timetable-subtitle" class="timetable-subtitle">115學年度 第1學期｜臺中市清水區清水國民小學</p>
+          <h2 id="timetable-title">一年戊班功課表</h2>
+          <button id="public-edit-timetable" type="button" class="button button-primary hidden">編輯功課表</button>
+        </header>
+        <div id="timetable-container" class="timetable-scroll">
+          <p class="empty-state">正在載入功課表…</p>
+        </div>
+        <p id="timetable-updated" class="timetable-updated"></p>
+      </div>
+    </section>
   </main>
 
   <footer>© <span id="footer-year"></span> 台中市清水國小 一年戊班 電子聯絡簿</footer>
@@ -181,6 +204,71 @@
       <label>網站名稱<input id="settings-title" type="text" maxlength="40" required></label>
       <label>頁首小標題<input id="settings-subtitle" type="text" maxlength="30" placeholder="115 學年度"></label>
       <div class="form-actions"><button type="button" class="button button-secondary" data-close>取消</button><button class="button button-primary">儲存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="timetable-dialog" class="modal timetable-modal">
+    <form id="timetable-form" class="modal-card">
+      <div class="modal-heading"><h2>功課表管理</h2><button type="button" class="close-button" data-close aria-label="關閉">×</button></div>
+
+      <div class="timetable-settings-grid">
+        <label>功課表標題<input id="timetable-edit-title" type="text" maxlength="40" required></label>
+        <label>上方說明<input id="timetable-edit-subtitle" type="text" maxlength="80"></label>
+        <label>上課天數
+          <select id="timetable-day-count">
+            <option value="5">5 天（星期一至五）</option>
+            <option value="6">6 天（星期一至六）</option>
+            <option value="7">7 天（星期一至日）</option>
+          </select>
+        </label>
+        <label>可愛風格
+          <select id="timetable-theme">
+            <option value="candy">🍬 糖果粉彩</option>
+            <option value="forest">🌿 森林動物</option>
+            <option value="ocean">🐳 海洋樂園</option>
+            <option value="space">🚀 星空探險</option>
+            <option value="sunny">🌞 活力陽光</option>
+          </select>
+        </label>
+        <label>午休位置
+          <select id="timetable-lunch-after"></select>
+        </label>
+        <label>午休文字<input id="timetable-lunch-label" type="text" maxlength="12" value="午休"></label>
+      </div>
+
+      <section class="editor-section">
+        <div class="editor-heading">
+          <div><h3>星期欄設定</h3><p>可修改星期名稱及服裝等提醒。</p></div>
+        </div>
+        <div id="timetable-day-editor" class="day-editor"></div>
+      </section>
+
+      <section class="editor-section">
+        <div class="editor-heading">
+          <div><h3>節次與課程</h3><p>節數、名稱與上下課時間都能調整。</p></div>
+          <div class="compact-actions">
+            <button id="add-period" type="button" class="button button-secondary">＋ 增加節次</button>
+            <button id="remove-period" type="button" class="button button-secondary">－ 移除末節</button>
+          </div>
+        </div>
+        <div id="timetable-editor" class="timetable-editor-scroll"></div>
+      </section>
+
+      <section class="editor-section csv-section">
+        <div>
+          <h3>CSV 匯入／匯出</h3>
+          <p>可用 Excel 編輯；請保留欄位名稱，儲存為 CSV UTF-8 後再匯入。</p>
+        </div>
+        <div class="compact-actions">
+          <button id="export-timetable-csv" type="button" class="button button-secondary">下載 CSV 樣板</button>
+          <label class="button button-secondary file-button">匯入 CSV<input id="import-timetable-csv" type="file" accept=".csv,text/csv"></label>
+        </div>
+      </section>
+
+      <div class="form-actions">
+        <button type="button" class="button button-secondary" data-close>取消</button>
+        <button class="button button-primary">儲存並發布功課表</button>
+      </div>
     </form>
   </dialog>
 

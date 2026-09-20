@@ -21,6 +21,63 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+const DEFAULT_DAYS = [
+  { name: "星期一", note: "制服" },
+  { name: "星期二", note: "體育服" },
+  { name: "星期三", note: "便服" },
+  { name: "星期四", note: "體育服" },
+  { name: "星期五", note: "制服" },
+  { name: "星期六", note: "" },
+  { name: "星期日", note: "" }
+];
+
+const DEFAULT_PERIODS = [
+  { label: "第 1 節", time: "08:35～09:15" },
+  { label: "第 2 節", time: "09:25～10:05" },
+  { label: "第 3 節", time: "10:20～11:00" },
+  { label: "第 4 節", time: "11:10～11:50" },
+  { label: "第 5 節", time: "13:20～14:00" },
+  { label: "第 6 節", time: "14:10～14:50" },
+  { label: "第 7 節", time: "15:00～15:40" }
+];
+
+const DEFAULT_CELLS = [
+  [
+    { subject: "本土語文／新住民語文", teacher: "吳美娥" }, { subject: "國語文", teacher: "王慧中" },
+    { subject: "生活課程（音樂）", teacher: "李怡嫺" }, { subject: "國語文", teacher: "王慧中" }, { subject: "國語文", teacher: "王慧中" }
+  ],
+  [
+    { subject: "國語文", teacher: "王慧中" }, { subject: "數學", teacher: "王慧中" },
+    { subject: "國語文", teacher: "王慧中" }, { subject: "數學", teacher: "王慧中" }, { subject: "數學", teacher: "王慧中" }
+  ],
+  [
+    { subject: "國語文", teacher: "王慧中" }, { subject: "健康與體育（體育）", teacher: "張紹睿" },
+    { subject: "數學", teacher: "王慧中" }, { subject: "健康與體育（體育）", teacher: "張紹睿" },
+    { subject: "彈性學習－國際新視野", teacher: "魏文怡" }
+  ],
+  [
+    { subject: "生活課程", teacher: "王慧中" }, { subject: "健康與體育（健康）", teacher: "王慧中" },
+    { subject: "生活課程", teacher: "王慧中" }, { subject: "清小風情暨閱讀饗宴", teacher: "" }, { subject: "生活課程", teacher: "王慧中" }
+  ],
+  [{ subject: "", teacher: "" }, { subject: "", teacher: "" }, { subject: "", teacher: "" }, { subject: "彈性學習－校本課程", teacher: "王慧中" }, { subject: "", teacher: "" }],
+  [{ subject: "", teacher: "" }, { subject: "", teacher: "" }, { subject: "", teacher: "" }, { subject: "生活課程（美勞）", teacher: "王慧中" }, { subject: "", teacher: "" }],
+  [{ subject: "", teacher: "" }, { subject: "", teacher: "" }, { subject: "", teacher: "" }, { subject: "生活課程（美勞）", teacher: "王慧中" }, { subject: "", teacher: "" }]
+];
+
+function defaultTimetable() {
+  return {
+    title: "一年戊班課表",
+    subtitle: "115學年度 第1學期｜臺中市清水區清水國民小學",
+    theme: "candy",
+    dayCount: 5,
+    days: DEFAULT_DAYS.slice(0, 5).map(day => ({ ...day })),
+    periods: DEFAULT_PERIODS.map(period => ({ ...period })),
+    cells: DEFAULT_CELLS.map(row => row.map(cell => ({ ...cell }))),
+    lunchAfter: 4,
+    lunchLabel: "午休"
+  };
+}
+
 const state = {
   user: null,
   entries: [],
@@ -28,6 +85,8 @@ const state = {
   links: [],
   tags: [],
   templates: [],
+  timetable: defaultTimetable(),
+  timetableDraft: null,
   settings: { title: "台中市清水國小 一年戊班 電子聯絡簿", subtitle: "115 學年度" },
   selectedDate: todayKey(),
   calendarDate: new Date(),
@@ -135,6 +194,343 @@ function openDialog(id) {
 
 function closeDialog(dialog) {
   if (dialog?.open) dialog.close();
+}
+
+function cloneTimetable(source = state.timetable) {
+  return {
+    title: source.title || "一年戊班課表",
+    subtitle: source.subtitle || "",
+    theme: ["candy", "forest", "ocean", "space", "sunny"].includes(source.theme) ? source.theme : "candy",
+    dayCount: Math.min(7, Math.max(5, Number(source.dayCount) || 5)),
+    days: (source.days || []).map(day => ({ name: day.name || "", note: day.note || "" })),
+    periods: (source.periods || []).map(period => ({ label: period.label || "", time: period.time || "" })),
+    cells: (source.cells || []).map(row => row.map(cell => ({ subject: cell?.subject || "", teacher: cell?.teacher || "" }))),
+    lunchAfter: Math.max(0, Number(source.lunchAfter) || 0),
+    lunchLabel: source.lunchLabel || "午休"
+  };
+}
+
+function normalizeTimetable(source = {}) {
+  const base = defaultTimetable();
+  const timetable = cloneTimetable({ ...base, ...source });
+  while (timetable.days.length < timetable.dayCount) {
+    timetable.days.push({ ...DEFAULT_DAYS[timetable.days.length] });
+  }
+  timetable.days = timetable.days.slice(0, timetable.dayCount);
+  if (!timetable.periods.length) timetable.periods = DEFAULT_PERIODS.map(period => ({ ...period }));
+  timetable.cells = timetable.periods.map((_, rowIndex) =>
+    timetable.days.map((__, dayIndex) => ({
+      subject: timetable.cells[rowIndex]?.[dayIndex]?.subject || "",
+      teacher: timetable.cells[rowIndex]?.[dayIndex]?.teacher || ""
+    }))
+  );
+  if (timetable.lunchAfter > timetable.periods.length) timetable.lunchAfter = 0;
+  return timetable;
+}
+
+function courseIcon(subject = "") {
+  if (/數學/.test(subject)) return "🧮";
+  if (/國語|語文/.test(subject)) return "📕";
+  if (/體育|健康/.test(subject)) return "⚽";
+  if (/音樂/.test(subject)) return "🎵";
+  if (/美勞|藝術/.test(subject)) return "🎨";
+  if (/閱讀/.test(subject)) return "📖";
+  if (/生活/.test(subject)) return "🌱";
+  if (/國際|英文/.test(subject)) return "🌏";
+  return subject ? "✏️" : "";
+}
+
+function renderTimetable() {
+  const timetable = normalizeTimetable(state.timetable);
+  const shell = $("#timetable-shell");
+  shell.className = `timetable-shell theme-${timetable.theme}`;
+  $("#timetable-title").textContent = timetable.title;
+  $("#timetable-subtitle").textContent = timetable.subtitle;
+  $(".timetable-decoration").textContent = ({
+    candy: "✏️　📚　⭐　🎨", forest: "🌿　🦊　🍄　🐿️", ocean: "🐳　🐚　🌊　🐠",
+    space: "🚀　⭐　🪐　🌙", sunny: "🌞　🌈　☁️　🌻"
+  })[timetable.theme];
+  $("#public-edit-timetable").classList.toggle("hidden", !isAdmin());
+
+  const container = $("#timetable-container");
+  const table = document.createElement("table");
+  table.className = "timetable-table";
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  const periodHead = document.createElement("th");
+  periodHead.scope = "col";
+  periodHead.textContent = "節次";
+  const timeHead = document.createElement("th");
+  timeHead.scope = "col";
+  timeHead.textContent = "時間";
+  headRow.append(periodHead, timeHead);
+  timetable.days.forEach(day => {
+    const th = document.createElement("th");
+    th.scope = "col";
+    const name = document.createElement("strong");
+    name.textContent = day.name;
+    th.append(name);
+    if (day.note) {
+      const note = document.createElement("small");
+      note.textContent = `（${day.note}）`;
+      th.append(note);
+    }
+    headRow.append(th);
+  });
+  thead.append(headRow);
+  table.append(thead);
+
+  const tbody = document.createElement("tbody");
+  timetable.periods.forEach((period, rowIndex) => {
+    if (timetable.lunchAfter === rowIndex) {
+      const lunchRow = document.createElement("tr");
+      lunchRow.className = "lunch-row";
+      const lunch = document.createElement("td");
+      lunch.colSpan = timetable.dayCount + 2;
+      lunch.textContent = timetable.lunchLabel;
+      lunchRow.append(lunch);
+      tbody.append(lunchRow);
+    }
+    const tr = document.createElement("tr");
+    const label = document.createElement("th");
+    label.scope = "row";
+    label.textContent = period.label;
+    const time = document.createElement("td");
+    time.className = "period-time";
+    time.textContent = period.time;
+    tr.append(label, time);
+    timetable.days.forEach((_, dayIndex) => {
+      const cellData = timetable.cells[rowIndex]?.[dayIndex] || {};
+      const td = document.createElement("td");
+      if (!cellData.subject && !cellData.teacher) td.classList.add("empty-course");
+      const subject = document.createElement("strong");
+      if (cellData.subject) {
+        const icon = document.createElement("span");
+        icon.className = "course-icon";
+        icon.setAttribute("aria-hidden", "true");
+        icon.textContent = courseIcon(cellData.subject);
+        subject.append(icon, document.createTextNode(cellData.subject));
+      }
+      td.append(subject);
+      if (cellData.teacher) {
+        const teacher = document.createElement("small");
+        teacher.textContent = cellData.teacher;
+        td.append(teacher);
+      }
+      tr.append(td);
+    });
+    tbody.append(tr);
+  });
+  table.append(tbody);
+  container.replaceChildren(table);
+
+  const updated = state.timetable.updatedAt?.toDate?.();
+  $("#timetable-updated").textContent = updated
+    ? `最後更新：${updated.toLocaleString("zh-TW", { hour12: false })}`
+    : "";
+}
+
+function syncLunchOptions() {
+  const select = $("#timetable-lunch-after");
+  const selected = Number(state.timetableDraft?.lunchAfter) || 0;
+  select.replaceChildren();
+  const none = document.createElement("option");
+  none.value = "0";
+  none.textContent = "不顯示午休列";
+  select.append(none);
+  state.timetableDraft.periods.forEach((period, index) => {
+    const option = document.createElement("option");
+    option.value = String(index + 1);
+    option.textContent = `第 ${index + 1} 列之後（${period.label || `第 ${index + 1} 節`}）`;
+    select.append(option);
+  });
+  select.value = String(Math.min(selected, state.timetableDraft.periods.length));
+}
+
+function renderTimetableEditor() {
+  const timetable = normalizeTimetable(state.timetableDraft || state.timetable);
+  state.timetableDraft = timetable;
+  $("#timetable-edit-title").value = timetable.title;
+  $("#timetable-edit-subtitle").value = timetable.subtitle;
+  $("#timetable-day-count").value = String(timetable.dayCount);
+  $("#timetable-theme").value = timetable.theme;
+  $("#timetable-lunch-label").value = timetable.lunchLabel;
+
+  const dayEditor = $("#timetable-day-editor");
+  dayEditor.replaceChildren();
+  timetable.days.forEach((day, index) => {
+    const card = document.createElement("div");
+    card.className = "day-editor-card";
+    const name = document.createElement("input");
+    name.type = "text";
+    name.value = day.name;
+    name.placeholder = `第 ${index + 1} 天名稱`;
+    name.dataset.dayName = String(index);
+    const note = document.createElement("input");
+    note.type = "text";
+    note.value = day.note;
+    note.placeholder = "服裝／提醒（可留空）";
+    note.dataset.dayNote = String(index);
+    card.append(name, note);
+    dayEditor.append(card);
+  });
+
+  const wrapper = $("#timetable-editor");
+  const table = document.createElement("table");
+  table.className = "timetable-edit-table";
+  const thead = document.createElement("thead");
+  const trHead = document.createElement("tr");
+  ["節次", "時間", ...timetable.days.map(day => day.name)].forEach(labelText => {
+    const th = document.createElement("th");
+    th.textContent = labelText;
+    trHead.append(th);
+  });
+  thead.append(trHead);
+  table.append(thead);
+  const tbody = document.createElement("tbody");
+  timetable.periods.forEach((period, rowIndex) => {
+    const tr = document.createElement("tr");
+    const labelCell = document.createElement("td");
+    const labelInput = document.createElement("input");
+    labelInput.type = "text";
+    labelInput.value = period.label;
+    labelInput.dataset.periodLabel = String(rowIndex);
+    labelCell.append(labelInput);
+    const timeCell = document.createElement("td");
+    const timeInput = document.createElement("input");
+    timeInput.type = "text";
+    timeInput.value = period.time;
+    timeInput.placeholder = "08:35～09:15";
+    timeInput.dataset.periodTime = String(rowIndex);
+    timeCell.append(timeInput);
+    tr.append(labelCell, timeCell);
+    timetable.days.forEach((_, dayIndex) => {
+      const td = document.createElement("td");
+      const subject = document.createElement("textarea");
+      subject.rows = 2;
+      subject.value = timetable.cells[rowIndex]?.[dayIndex]?.subject || "";
+      subject.placeholder = "課程";
+      subject.dataset.cellSubject = `${rowIndex}:${dayIndex}`;
+      const teacher = document.createElement("input");
+      teacher.type = "text";
+      teacher.value = timetable.cells[rowIndex]?.[dayIndex]?.teacher || "";
+      teacher.placeholder = "教師（可留空）";
+      teacher.dataset.cellTeacher = `${rowIndex}:${dayIndex}`;
+      td.append(subject, teacher);
+      tr.append(td);
+    });
+    tbody.append(tr);
+  });
+  table.append(tbody);
+  wrapper.replaceChildren(table);
+  syncLunchOptions();
+}
+
+function collectTimetableEditor() {
+  const timetable = normalizeTimetable(state.timetableDraft || state.timetable);
+  timetable.title = $("#timetable-edit-title").value.trim();
+  timetable.subtitle = $("#timetable-edit-subtitle").value.trim();
+  timetable.theme = $("#timetable-theme").value;
+  timetable.lunchAfter = Number($("#timetable-lunch-after").value) || 0;
+  timetable.lunchLabel = $("#timetable-lunch-label").value.trim() || "午休";
+  document.querySelectorAll("[data-day-name]").forEach(input => { timetable.days[Number(input.dataset.dayName)].name = input.value.trim(); });
+  document.querySelectorAll("[data-day-note]").forEach(input => { timetable.days[Number(input.dataset.dayNote)].note = input.value.trim(); });
+  document.querySelectorAll("[data-period-label]").forEach(input => { timetable.periods[Number(input.dataset.periodLabel)].label = input.value.trim(); });
+  document.querySelectorAll("[data-period-time]").forEach(input => { timetable.periods[Number(input.dataset.periodTime)].time = input.value.trim(); });
+  document.querySelectorAll("[data-cell-subject]").forEach(input => {
+    const [row, day] = input.dataset.cellSubject.split(":").map(Number);
+    timetable.cells[row][day].subject = input.value.trim();
+  });
+  document.querySelectorAll("[data-cell-teacher]").forEach(input => {
+    const [row, day] = input.dataset.cellTeacher.split(":").map(Number);
+    timetable.cells[row][day].teacher = input.value.trim();
+  });
+  state.timetableDraft = timetable;
+  return timetable;
+}
+
+function openTimetableEditor() {
+  if (!isAdmin()) return;
+  state.timetableDraft = normalizeTimetable(state.timetable);
+  renderTimetableEditor();
+  openDialog("timetable-dialog");
+}
+
+function csvEscape(value) {
+  const text = String(value ?? "");
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = "", quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (quoted) {
+      if (char === '"' && text[index + 1] === '"') { field += '"'; index += 1; }
+      else if (char === '"') quoted = false;
+      else field += char;
+    } else if (char === '"') quoted = true;
+    else if (char === ",") { row.push(field); field = ""; }
+    else if (char === "\n") { row.push(field.replace(/\r$/, "")); rows.push(row); row = []; field = ""; }
+    else field += char;
+  }
+  if (field || row.length) { row.push(field.replace(/\r$/, "")); rows.push(row); }
+  return rows.filter(item => item.some(value => value.trim()));
+}
+
+function exportTimetableCSV() {
+  const timetable = collectTimetableEditor();
+  const rows = [
+    ["#功課表標題", timetable.title], ["#上方說明", timetable.subtitle], ["#風格", timetable.theme],
+    ["#午休位置", timetable.lunchAfter], ["#午休文字", timetable.lunchLabel]
+  ];
+  timetable.days.forEach(day => rows.push(["#星期", day.name, day.note]));
+  const header = ["節次", "時間"];
+  timetable.days.forEach(day => header.push(`${day.name}課程`, `${day.name}教師`));
+  rows.push(header);
+  timetable.periods.forEach((period, rowIndex) => {
+    const row = [period.label, period.time];
+    timetable.days.forEach((_, dayIndex) => {
+      const cell = timetable.cells[rowIndex][dayIndex];
+      row.push(cell.subject, cell.teacher);
+    });
+    rows.push(row);
+  });
+  const csv = "\uFEFF" + rows.map(row => row.map(csvEscape).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "一年戊班功課表樣板.csv";
+  link.click();
+  URL.revokeObjectURL(link.href);
+  showToast("CSV 樣板已下載");
+}
+
+function importTimetableCSV(text) {
+  const rows = parseCSV(text.replace(/^\uFEFF/, ""));
+  const days = rows.filter(row => row[0] === "#星期").map(row => ({ name: row[1]?.trim() || "", note: row[2]?.trim() || "" }));
+  if (days.length < 5 || days.length > 7) throw new Error("CSV 必須包含 5～7 列「#星期」設定");
+  const headerIndex = rows.findIndex(row => row[0]?.trim() === "節次" && row[1]?.trim() === "時間");
+  if (headerIndex < 0) throw new Error("找不到「節次,時間」欄位標題");
+  const valueOf = key => rows.find(row => row[0] === key)?.[1]?.trim() || "";
+  const periodRows = rows.slice(headerIndex + 1).filter(row => row[0]?.trim());
+  if (!periodRows.length) throw new Error("CSV 沒有節次資料");
+  const periods = periodRows.map(row => ({ label: row[0].trim(), time: row[1]?.trim() || "" }));
+  const cells = periodRows.map(row => days.map((_, dayIndex) => ({
+    subject: row[2 + dayIndex * 2]?.trim() || "",
+    teacher: row[3 + dayIndex * 2]?.trim() || ""
+  })));
+  state.timetableDraft = normalizeTimetable({
+    title: valueOf("#功課表標題") || "一年戊班課表",
+    subtitle: valueOf("#上方說明"),
+    theme: valueOf("#風格") || "candy",
+    dayCount: days.length, days, periods, cells,
+    lunchAfter: Number(valueOf("#午休位置")) || 0,
+    lunchLabel: valueOf("#午休文字") || "午休"
+  });
+  renderTimetableEditor();
+  showToast("CSV 已匯入，請確認後儲存");
 }
 
 function renderHeader() {
@@ -639,6 +1035,13 @@ function subscribeData() {
     if (snapshot.exists()) state.settings = { ...state.settings, ...snapshot.data() };
     renderHeader();
   }, error => showToast(`設定載入失敗：${error.message}`, true));
+
+  onSnapshot(doc(db, "timetables", "main"), snapshot => {
+    state.timetable = snapshot.exists()
+      ? { ...normalizeTimetable(snapshot.data()), updatedAt: snapshot.data().updatedAt }
+      : defaultTimetable();
+    renderTimetable();
+  }, error => showToast(`功課表載入失敗：${error.message}`, true));
 }
 
 function subscribeDrafts() {
@@ -680,6 +1083,10 @@ document.querySelectorAll("[data-open]").forEach(button => button.addEventListen
     $("#settings-subtitle").value = state.settings.subtitle;
   }
   if (id === "template-dialog") resetTemplateForm();
+  if (id === "timetable-dialog") {
+    openTimetableEditor();
+    return;
+  }
   openDialog(id);
 }));
 
@@ -808,6 +1215,71 @@ $("#template-form").addEventListener("submit", async event => {
 
 $("#template-cancel-edit").addEventListener("click", resetTemplateForm);
 
+document.querySelectorAll("[data-page]").forEach(button => button.addEventListener("click", () => {
+  const page = button.dataset.page;
+  document.querySelectorAll("[data-page]").forEach(item => item.classList.toggle("active", item === button));
+  $("#contact-page").classList.toggle("hidden", page !== "contact");
+  $("#timetable-page").classList.toggle("hidden", page !== "timetable");
+  if (page === "timetable") renderTimetable();
+}));
+
+$("#public-edit-timetable").addEventListener("click", openTimetableEditor);
+
+$("#timetable-day-count").addEventListener("change", event => {
+  const timetable = collectTimetableEditor();
+  timetable.dayCount = Number(event.target.value);
+  while (timetable.days.length < timetable.dayCount) timetable.days.push({ ...DEFAULT_DAYS[timetable.days.length] });
+  timetable.days = timetable.days.slice(0, timetable.dayCount);
+  timetable.cells = timetable.periods.map((_, rowIndex) => timetable.days.map((__, dayIndex) => ({
+    subject: timetable.cells[rowIndex]?.[dayIndex]?.subject || "",
+    teacher: timetable.cells[rowIndex]?.[dayIndex]?.teacher || ""
+  })));
+  state.timetableDraft = timetable;
+  renderTimetableEditor();
+});
+
+$("#add-period").addEventListener("click", () => {
+  const timetable = collectTimetableEditor();
+  const number = timetable.periods.length + 1;
+  timetable.periods.push({ label: `第 ${number} 節`, time: "" });
+  timetable.cells.push(timetable.days.map(() => ({ subject: "", teacher: "" })));
+  state.timetableDraft = timetable;
+  renderTimetableEditor();
+});
+
+$("#remove-period").addEventListener("click", () => {
+  const timetable = collectTimetableEditor();
+  if (timetable.periods.length <= 1) return showToast("至少要保留一節", true);
+  timetable.periods.pop();
+  timetable.cells.pop();
+  if (timetable.lunchAfter > timetable.periods.length) timetable.lunchAfter = 0;
+  state.timetableDraft = timetable;
+  renderTimetableEditor();
+});
+
+$("#export-timetable-csv").addEventListener("click", exportTimetableCSV);
+$("#import-timetable-csv").addEventListener("change", async event => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try { importTimetableCSV(await file.text()); }
+  catch (error) { showToast(`CSV 匯入失敗：${error.message}`, true); }
+  event.target.value = "";
+});
+
+$("#timetable-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!isAdmin()) return;
+  const timetable = collectTimetableEditor();
+  if (!timetable.title || timetable.days.some(day => !day.name) || timetable.periods.some(period => !period.label)) {
+    return showToast("請填寫功課表標題、星期名稱與節次名稱", true);
+  }
+  try {
+    await setDoc(doc(db, "timetables", "main"), { ...timetable, updatedAt: serverTimestamp() });
+    closeDialog($("#timetable-dialog"));
+    showToast("功課表已儲存並發布");
+  } catch (error) { showToast(`功課表儲存失敗：${error.message}`, true); }
+});
+
 $("#link-form").addEventListener("submit", async event => {
   event.preventDefault();
   if (!isAdmin()) return;
@@ -868,11 +1340,12 @@ document.querySelectorAll("[data-entry-filter]").forEach(button => button.addEve
 onAuthStateChanged(auth, user => {
   state.user = user;
   if (!isAdmin()) state.entryFilter = "all";
-  renderHeader(); renderEntries(); renderResources(); renderAnnouncements(); subscribeDrafts();
+  renderHeader(); renderEntries(); renderResources(); renderAnnouncements(); renderTimetable(); subscribeDrafts();
 });
 
 renderHeader();
 renderCalendar();
+renderTimetable();
 subscribeData();
 setInterval(() => {
   renderEntries();

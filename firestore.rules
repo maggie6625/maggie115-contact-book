@@ -31,6 +31,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /timetables/{timetableId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin();
